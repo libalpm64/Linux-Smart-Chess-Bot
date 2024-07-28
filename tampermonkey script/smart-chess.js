@@ -20,7 +20,6 @@
 // @resource    lozza.js        	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/lozza.js
 // @resource    stockfish-5.js  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-5.js
 // @resource    stockfish-2018.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-2018.js
-// @resource    tomitankChess.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/tomitankChess.js
 // @run-at      document-start
 // @inject-into content
 // @downloadURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/smart-chess.js
@@ -1413,7 +1412,6 @@ function addGuiPages() {
                         <option value="option-lozza" id="web-engine">Lozza</option>
                         <option value="option-stockfish" id="web-engine">Stockfish 5</option>
                         <option value="option-stockfish2" id="web-engine">Stockfish 2018</option>
-			<option value="option-tomitankChess" id="web-engine">tomitankChess</option>
                         <option value="option-nodeserver" id="local-engine">Node Server Engines</option>
                     </select>
                 </div>
@@ -2011,8 +2009,6 @@ function loadChessEngine(callback) {
             engineObjectURL = URL.createObjectURL(new Blob([GM_getResourceText('stockfish-5.js')], { type: 'application/javascript' }));
         else if (engineIndex == 2)
             engineObjectURL = URL.createObjectURL(new Blob([GM_getResourceText('stockfish-2018.js')], { type: 'application/javascript' }));
-	else if (engineIndex == 3)
-            engineObjectURL = URL.createObjectURL(new Blob([GM_getResourceText('tomitankChess.js')], { type: 'application/javascript' }));
     }
 
     if (engineObjectURL) {
