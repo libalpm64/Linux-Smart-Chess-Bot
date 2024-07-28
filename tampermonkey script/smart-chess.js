@@ -4,7 +4,7 @@
 // @author      Libalpm
 // @version     8.6
 // @homepageURL https://github.com/libalpm64/Linux-Smart-Chess-Bot/e
-// @supportURL  https://mmgc.life/
+// @supportURL  https://libalpm.dev
 // @match       https://www.chess.com/*
 // @match       https://lichess.org/*
 // @grant       GM_getValue
