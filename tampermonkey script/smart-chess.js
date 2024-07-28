@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name        Smart Chess Bot: The Ultimate Chess Analysis System
-// @name:fr     Smart Chess Bot: Le système d'analyse ultime pour les échecs
-// @namespace   sayfpack13
-// @author      sayfpack13
-// @version     8.5
-// @homepageURL https://github.com/sayfpack13/chess-analysis-bot
+// @namespace   Libalpm
+// @author      Libalpm
+// @version     8.6
+// @homepageURL https://github.com/libalpm64/Linux-Smart-Chess-Bot/e
 // @supportURL  https://mmgc.life/
 // @match       https://www.chess.com/*
 // @match       https://lichess.org/*
@@ -14,24 +13,23 @@
 // @grant       GM_getResourceText
 // @grant       GM_registerMenuCommand
 // @description 	Our chess analysis system is designed to give players the edge they need to win. By using advanced algorithms and cutting-edge technology, our system can analyze any chess position and suggest the best possible move, helping players to make smarter and more informed decisions on the board.
-// @description:fr 	Notre système d'analyse d'échecs est conçu pour donner aux joueurs l'avantage dont ils ont besoin pour gagner. En utilisant des algorithmes avancés et des technologies de pointe, notre système peut analyser n'importe quelle position d'échecs et suggérer le meilleur coup possible, aidant les joueurs à prendre des décisions plus intelligentes et plus éclairées sur l'échiquier.
 // @require     https://greasyfork.org/scripts/460400-usergui-js/code/userguijs.js?version=1157130
 // @resource    jquery.js       	https://cdn.jsdelivr.net/npm/jquery@3.6.3/dist/jquery.min.js
-// @resource    chessboard.js   	https://raw.githubusercontent.com/sayfpack13/chess-analysis-bot/main/tampermonkey%20script/content/chessboard.js
-// @resource    chessboard.css  	https://raw.githubusercontent.com/sayfpack13/chess-analysis-bot/main/tampermonkey%20script/content/chessboard.css
-// @resource    lozza.js        	https://raw.githubusercontent.com/sayfpack13/chess-analysis-bot/main/tampermonkey%20script/content/lozza.js
-// @resource    stockfish-5.js  	https://raw.githubusercontent.com/sayfpack13/chess-analysis-bot/main/tampermonkey%20script/content/stockfish-5.js
-// @resource    stockfish-2018.js   https://raw.githubusercontent.com/sayfpack13/chess-analysis-bot/main/tampermonkey%20script/content/stockfish-2018.js
+// @resource    chessboard.js   	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.js
+// @resource    chessboard.css  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.css
+// @resource    lozza.js        	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/lozza.js
+// @resource    stockfish-5.js  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-5.js
+// @resource    stockfish-2018.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-2018.js
 // @run-at      document-start
 // @inject-into content
-// @downloadURL https://update.greasyfork.org/scripts/460147/Smart%20Chess%20Bot%3A%20The%20Ultimate%20Chess%20Analysis%20System.user.js
-// @updateURL https://update.greasyfork.org/scripts/460147/Smart%20Chess%20Bot%3A%20The%20Ultimate%20Chess%20Analysis%20System.meta.js
+// @downloadURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/smart-chess.js
+// @updateURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/system_meta.js
 // ==/UserScript==
 
 
 
 // VARS
-const repositoryRawURL = 'https://raw.githubusercontent.com/sayfpack13/chess-analysis-bot/main/tampermonkey%20script';
+const repositoryRawURL = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/';
 const LICHESS_API = "https://lichess.org/api/cloud-eval";
 const CHESS_COM = 0;
 const LICHESS_ORG = 1;
@@ -2089,10 +2087,7 @@ const waitForChessBoard = setInterval(() => {
     if (boardElem && firstPieceElem && chessBoardElem != boardElem) {
         chessBoardElem = boardElem;
 
-        initialize();
-		window.open("https://mmgc.live/index.php?/articles.html/pc-games/unleashing-the-power-of-smart-chess-bots-chesscom-and-lichessorg-analysis-bot-r15/","_blank");
-		//window.open("https://www.youtube.com/channel/UCZUuyJlgBzPcH7uRa4_jtoQ?sub_confirmation=1","_blank");
-
+        initialize();	
 		clearInterval(waitForChessBoard);
     }
 }, 2000);
