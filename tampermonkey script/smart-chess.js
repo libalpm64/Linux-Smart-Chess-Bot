@@ -13,22 +13,18 @@
 // @grant       GM_getResourceText
 // @grant       GM_registerMenuCommand
 // @description Our chess analysis system analyzes any chess position and suggests the best possible move.
-// @require     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/UserGui.js
-// @resource    jquery.js          https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/jquery.js
-// @resource    chessboard.js      https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.js
-// @resource    chessboard.css     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.css
-// @resource    lozza.js           https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/lozza.js
-// @resource    stockfish-5.js     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-5.js
-// @resource    stockfish-2018.js  https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-2018.js
-// @resource    tomitankChess.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/tomitankChess.js
+// @require     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/content/UserGui.js
+// @resource    jquery.js          https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/content/jquery.js
+// @resource    chessboard.js      https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/content/chessboard.js
+// @resource    chessboard.css     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/content/chessboard.css
 // @run-at      document-start
 // @inject-into content
-// @downloadURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/smart-chess.js
-// @updateURL   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/system_meta.js
+// @downloadURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/smart-chess.js
+// @updateURL   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/system_meta.js
 // ==/UserScript==
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const repositoryRawURL  = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script';
+const repositoryRawURL  = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main';
 const LICHESS_API       = 'https://lichess.org/api/cloud-eval';
 const CHESS_COM         = 0;
 const LICHESS_ORG       = 1;
@@ -45,10 +41,11 @@ const MAX_LOGS          = 50;
 
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
-// Engine index → resource name mapping (index 4 = node server)
+// Engine index → resource name mapping (index 4 = node server, index 5 = WASM engine)
 const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js'];
-const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess'];
-const node_engine_id    = ENGINE_RESOURCES.length; // index 4
+const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18'];
+const ENGINE_WASM      = 4;
+const node_engine_id    = 4; // index for node server
 
 const best_move_color                = [0,   0,   250, 0.5];
 const opposite_best_move_color       = [250, 0,   0,   0.5];
@@ -97,6 +94,7 @@ let firstPieceElem      = null;
 let forcedBestMove      = false;
 let engine              = null;
 let engineObjectURL     = null;
+let loadedEngineIndex = -1;
 
 let chessBoardElem      = null;
 let turn                = '-';
@@ -173,13 +171,21 @@ function FenUtils() {
      */
     this.getFenCodeFromPieceElem = elem => {
         if (CURRENT_SITE === CHESS_COM) {
-            // class list contains e.g. "piece wp square-44" — match the 2-char color+piece token
             const cls = [...elem.classList].find(c => /^(b|w)[prnbqk]$/.test(c));
             if (!cls) return null;
             return this.pieceCodeToFen(cls);
         } else if (CURRENT_SITE === LICHESS_ORG) {
-            const cp = elem.cgPiece;
-            if (!cp) return null;
+            let cp = elem.cgPiece || elem.dataset?.role || elem.getAttribute('data-role');
+            if (!cp) {
+                const role = elem.getAttribute('data-role') || elem.classList?.find(c => c.startsWith('role-'));
+                const color = elem.getAttribute('data-color') || elem.classList?.find(c => c === 'white' || c === 'black');
+                if (role && color) {
+                    const roleMap = { pawn: 'p', knight: 'n', bishop: 'b', rook: 'r', queen: 'q', king: 'k' };
+                    const r = role.replace('role-', '');
+                    return this.pieceCodeToFen((color[0]) + (roleMap[r] || r[0]));
+                }
+                return null;
+            }
             const [color, name] = cp.split(' ');
             return this.pieceCodeToFen(color[0] + (name === 'knight' ? 'n' : name[0]));
         }
@@ -214,7 +220,7 @@ function FenUtils() {
     };
 
     this.getBasicFen = () => {
-        const sel = CURRENT_SITE === CHESS_COM ? '.piece' : 'piece';
+        const sel = CURRENT_SITE === CHESS_COM ? '.piece' : 'piece, .cg-piece, [data-role]';
         [...chessBoardElem.querySelectorAll(sel)]
             .filter(e => !e.classList.contains('ghost'))
             .forEach(e => {
@@ -226,10 +232,20 @@ function FenUtils() {
                     if (!m) return;
                     this.board[8 - Number(m[2])][Number(m[1]) - 1] = code;
                 } else {
-                    const key = e.cgKey;
-                    if (!key) return;
-                    const [x, y] = key.split('');
-                    this.board[8 - Number(y)][alphabetPosition(x)] = code;
+                    let key = e.cgKey || e.dataset?.key || e.getAttribute('data-key') || e.getAttribute('data-square');
+                    if (key) {
+                        const [x, y] = key.split('');
+                        this.board[8 - Number(y)][alphabetPosition(x)] = code;
+                    } else {
+                        const pos = elem.style.left || elem.style.transform;
+                        if (pos) {
+                            const m = pos.match(/(\d+)%/);
+                            if (m) {
+                                const col = Math.floor(parseInt(m[1]) / 12.5);
+                                const row = Math.floor(parseInt(m[1]) / 12.5);
+                            }
+                        }
+                    }
                 }
             });
         return this.squeezeEmptySquares(this.board.map(r => r.join('')).join('/'));
@@ -609,26 +625,52 @@ function getBestMoves(request) {
 
 // ─── Engine lifecycle ─────────────────────────────────────────────────────────
 function loadChessEngine(callback) {
-    if (CURRENT_SITE === LICHESS_ORG) return callback();
+    const engineName = ENGINE_RESOURCES[engineIndex];
+    const engineBase = `${repositoryRawURL}/engines`;
 
-    if (!engineObjectURL && ENGINE_RESOURCES[engineIndex]) {
-        const src = GM_getResourceText(ENGINE_RESOURCES[engineIndex]);
-        if (src) engineObjectURL = URL.createObjectURL(
-            new Blob([src], { type: 'application/javascript' }));
+    if (engineIndex === ENGINE_WASM) {
+        const engineWasm = `${engineBase}/wasm/stockfish-18.wasm`;
+        
+        fetch(`${engineBase}/wasm/stockfish-18.js`).then(r => r.text()).then(src => {
+            const patched = src.replace(
+                'e=e||{},(c=c||(void 0!==e?e:{})',
+                `e=e||{},(c=c||(void 0!==e?e:{})).locateFile=function(e){return"${engineWasm}"}`
+            );
+            engineObjectURL = URL.createObjectURL(
+                new Blob([patched], { type: 'application/javascript' }));
+            loadedEngineIndex = ENGINE_WASM;
+            engine = new Worker(engineObjectURL);
+            engine.postMessage('ucinewgame');
+            Interface.log(`Loaded engine: ${ENGINE_NAMES[ENGINE_WASM]}`);
+        }).catch(e => {
+            Interface.log(`Failed to load engine: ${e}`);
+        });
+        return callback();
     }
 
-    if (engineObjectURL) {
+    if (engineName) {
+        fetch(`${engineBase}/js/${engineName}`).then(r => r.text()).then(src => {
+            engineObjectURL = URL.createObjectURL(
+                new Blob([src], { type: 'application/javascript' }));
+            loadedEngineIndex = engineIndex;
+            engine = new Worker(engineObjectURL);
+            engine.postMessage('ucinewgame');
+            Interface.log(`Loaded engine: ${ENGINE_NAMES[engineIndex]}`);
+        }).catch(e => {
+            Interface.log(`Failed to load engine: ${e}`);
+        });
+    } else if (engineObjectURL && loadedEngineIndex === engineIndex) {
         engine = new Worker(engineObjectURL);
         engine.postMessage('ucinewgame');
-        Interface.log(`Loaded engine: ${ENGINE_NAMES[engineIndex] || 'unknown'}`);
     }
     callback();
 }
 
 function reloadChessEngine(forced, callback) {
-    if (engineIndex === node_engine_id && !forced) return callback();
+    const needsReload = forced || loadedEngineIndex !== engineIndex || (reload_engine && reload_count >= reload_every);
+    if (engineIndex === node_engine_id && !needsReload) return callback();
 
-    if (forced || (reload_engine && reload_count >= reload_every)) {
+    if (needsReload) {
         reload_count = 1;
         Interface.log('Reloading chess engine...');
         engine?.terminate();
@@ -938,7 +980,7 @@ function openGUI() {
             }
 
             let uiBoard = popWin.ChessBoard('board', {
-                pieceTheme: `${repositoryRawURL}/content/chesspieces/{piece}.svg`,
+                pieceTheme: `${repositoryRawURL}/tampermonkey%20script/content/chesspieces/{piece}.svg`,
                 position:   'start',
                 orientation: playerColor === 'b' ? 'black' : 'white'
             });
@@ -956,7 +998,7 @@ function openGUI() {
             new MutationObserver(() => {
                 try {
                     uiBoard = popWin.ChessBoard('board', {
-                        pieceTheme: `${repositoryRawURL}/content/chesspieces/{piece}.svg`,
+                        pieceTheme: `${repositoryRawURL}/tampermonkey%20script/content/chesspieces/{piece}.svg`,
                         position:   fenEl.textContent || 'start',
                         orientation: orientationEl.textContent === 'b' ? 'black' : 'white'
                     });
@@ -1219,7 +1261,8 @@ const waitForChessBoard = setInterval(() => {
 
     if (CURRENT_SITE === LICHESS_ORG) {
         boardElem      = document.querySelector('.cg-wrap');
-        firstPieceElem = boardElem?.querySelector('piece') ?? null;
+        if (!boardElem) boardElem = document.querySelector('[data-board]');
+        firstPieceElem = boardElem?.querySelector('piece') ?? boardElem?.querySelector('.cg-piece') ?? boardElem?.querySelector('[data-role]') ?? null;
     } else if (CURRENT_SITE === CHESS_COM) {
         boardElem      = document.querySelector('.board');
         firstPieceElem = document.querySelector('.piece');
