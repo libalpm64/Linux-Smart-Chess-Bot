@@ -883,6 +883,8 @@ function openGUI() {
          */
         const popDoc  = Gui.document;
         const popHead = popDoc.head;
+        const popWin  = Gui.window;
+        const q = id => popDoc.querySelector(id);
 
         const injectScript = (text) => {
             const s = popDoc.createElement('script');
@@ -894,47 +896,90 @@ function openGUI() {
         injectScript(GM_getResourceText('jquery.js'));
         injectScript(GM_getResourceText('chessboard.js'));
 
-        // Now jQuery + ChessBoard are available in the popup synchronously
-        const popWin = Gui.window;
-        const q = id => popDoc.querySelector(id);
-
         // ── Init the visual chessboard in the popup ──
         const fenEl         = q('#fen');
         const orientationEl = q('#orientation');
 
-        if (fenEl && !isFirefox() && CURRENT_SITE !== LICHESS_ORG) {
-            // jQuery must be accessed from the popup window context
-            const $ = popWin.jQuery;
-            if ($ && popWin.ChessBoard) {
-                let uiBoard = popWin.ChessBoard('board', {
-                    pieceTheme: `${repositoryRawURL}/content/chesspieces/{piece}.svg`,
-                    position:   'start',
-                    orientation: playerColor === 'b' ? 'black' : 'white'
-                });
+        if (!fenEl) {
+            // FEN element not found — remove board card
+            q('#chessboard-card')?.remove();
+            q('#orientation')?.remove();
+            return;
+        }
 
-                // Watch orientation element for flips
-                new MutationObserver(() => {
+        // Wait for jQuery and ChessBoard to be available in the popup window
+        // Poll with increasing delays to ensure libraries are fully loaded
+        const waitForLibraries = (attempts = 0) => {
+            const maxAttempts = 50; // ~5 seconds total
+            const delay = attempts < 10 ? 50 : 100; // Start fast, then slow down
+            
+            if (attempts >= maxAttempts) {
+                console.warn('UserGui: jQuery or ChessBoard failed to load after multiple attempts');
+                q('#chessboard-card')?.remove();
+                q('#orientation')?.remove();
+                return;
+            }
+
+            // Check if both jQuery and ChessBoard are available in popup context
+            if (popWin.jQuery && popWin.ChessBoard) {
+                initializeChessboard();
+            } else {
+                setTimeout(() => waitForLibraries(attempts + 1), delay);
+            }
+        };
+
+        const initializeChessboard = () => {
+            const $ = popWin.jQuery;
+            
+            // Double-check the elements still exist
+            if (!q('#board')) {
+                console.warn('UserGui: #board element not found');
+                return;
+            }
+
+            let uiBoard = popWin.ChessBoard('board', {
+                pieceTheme: `${repositoryRawURL}/content/chesspieces/{piece}.svg`,
+                position:   'start',
+                orientation: playerColor === 'b' ? 'black' : 'white'
+            });
+
+            // Verify the board was actually created
+            if (!uiBoard) {
+                console.error('UserGui: ChessBoard initialization returned null/undefined');
+                q('#chessboard-card')?.remove();
+                return;
+            }
+
+            console.log('UserGui: ChessBoard successfully initialized');
+
+            // Watch orientation element for flips
+            new MutationObserver(() => {
+                try {
                     uiBoard = popWin.ChessBoard('board', {
                         pieceTheme: `${repositoryRawURL}/content/chesspieces/{piece}.svg`,
                         position:   fenEl.textContent || 'start',
                         orientation: orientationEl.textContent === 'b' ? 'black' : 'white'
                     });
-                }).observe(orientationEl, { childList: true, characterData: true, subtree: true });
+                } catch (e) {
+                    console.error('UserGui: Error reinitializing board on orientation change:', e);
+                }
+            }).observe(orientationEl, { childList: true, characterData: true, subtree: true });
 
-                // Watch FEN element for position updates
-                new MutationObserver(() => {
-                    try { uiBoard.position(fenEl.textContent); } catch(_) {}
-                }).observe(fenEl, { childList: true, characterData: true, subtree: true });
-            } else {
-                // jQuery or ChessBoard not available — remove board card to avoid blank space
-                q('#chessboard-card')?.remove();
-                q('#orientation')?.remove();
-            }
-        } else {
-            // Firefox / Lichess: remove chessboard UI
-            q('#chessboard-card')?.remove();
-            q('#orientation')?.remove();
-        }
+            // Watch FEN element for position updates
+            new MutationObserver(() => {
+                try { 
+                    const newFen = fenEl.textContent;
+                    if (newFen && uiBoard) {
+                        uiBoard.position(newFen); 
+                    }
+                } catch(e) {
+                    console.error('UserGui: Error updating board position:', e);
+                }
+            }).observe(fenEl, { childList: true, characterData: true, subtree: true });
+        };
+
+        // Start waiting for libraries
+        waitForLibraries();
 
         // ── Cache all settings elements ──
         const depthRangeEl       = q('#depth-range');
