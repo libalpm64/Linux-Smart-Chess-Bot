@@ -336,7 +336,7 @@ if (!isNotCompatibleBrowser()) {
 Gui.settings.window.title = 'Smart Chess Bot';
 Gui.settings.window.external = true;
 Gui.settings.window.size.width = 500;
-Gui.settings.gui.external.popup = false;
+Gui.settings.gui.external.popup = true;
 Gui.settings.gui.external.style += GM_getResourceText('chessboard.css');
 Gui.settings.gui.external.style += `
 div[class^='board'] {
@@ -537,11 +537,13 @@ function InterfaceUtils() {
         markMove: (fromSquare, toSquare, rgba_color) => {
             if (!Gui?.document) return;
 
-            let fromElem = toElem = null;
+            let fromElem = null;
+            let toElem = null;
 
 
             if (CURRENT_SITE == CHESS_COM) {
-                [fromElem, toElem] = [this.boardUtils.findSquareElem(fromSquare), this.boardUtils.findSquareElem(toSquare)];
+                fromElem = this.boardUtils.findSquareElem(fromSquare);
+                toElem = this.boardUtils.findSquareElem(toSquare);
 
 
                 if (!isNotCompatibleBrowser()) {
