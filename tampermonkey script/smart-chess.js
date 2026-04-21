@@ -2,8 +2,8 @@
 // @name        Smart Chess Bot: The Ultimate Chess Analysis System
 // @namespace   Libalpm
 // @author      Libalpm
-// @version     8.6
-// @homepageURL https://github.com/libalpm64/Linux-Smart-Chess-Bot/e
+// @version     8.8
+// @homepageURL https://github.com/libalpm64/Linux-Smart-Chess-Bot/
 // @supportURL  https://libalpm.dev
 // @match       https://www.chess.com/*
 // @match       https://lichess.org/*
@@ -12,2139 +12,1177 @@
 // @grant       GM_xmlhttpRequest
 // @grant       GM_getResourceText
 // @grant       GM_registerMenuCommand
-// @description 	Our chess analysis system is designed to give players the edge they need to win. By using advanced algorithms and cutting-edge technology, our system can analyze any chess position and suggest the best possible move, helping players to make smarter and more informed decisions on the board.
-// @require     https://raw.githubusercontent.com/AugmentedWeb/UserGui/main/usergui.js
-// @resource    jquery.js       	https://cdn.jsdelivr.net/npm/jquery@3.6.3/dist/jquery.min.js
-// @resource    chessboard.js   	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.js
-// @resource    chessboard.css  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.css
-// @resource    lozza.js        	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/engines/js/lozza.js
-// @resource    stockfish-5.js  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/engines/js/stockfish-5.js
-// @resource    stockfish-2018.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/engines/js/stockfish-2018.js
+// @description Our chess analysis system analyzes any chess position and suggests the best possible move.
+// @require     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/UserGui.js
+// @resource    jquery.js          https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/jquery.js
+// @resource    chessboard.js      https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.js
+// @resource    chessboard.css     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.css
+// @resource    lozza.js           https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/lozza.js
+// @resource    stockfish-5.js     https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-5.js
+// @resource    stockfish-2018.js  https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-2018.js
+// @resource    tomitankChess.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/tomitankChess.js
 // @run-at      document-start
 // @inject-into content
 // @downloadURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/smart-chess.js
-// @updateURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/system_meta.js
+// @updateURL   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/system_meta.js
 // ==/UserScript==
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const repositoryRawURL  = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script';
+const LICHESS_API       = 'https://lichess.org/api/cloud-eval';
+const CHESS_COM         = 0;
+const LICHESS_ORG       = 1;
+const TURN_UPDATE_FIX   = false;
 
+const MAX_DEPTH         = 20;
+const MIN_DEPTH         = 1;
+const MAX_MOVETIME      = 2000;
+const MIN_MOVETIME      = 50;
+const MAX_ELO           = 3500;
+const DEPTH_MODE        = 0;
+// const MOVETIME_MODE  = 1;  // reserved
+const MAX_LOGS          = 50;
 
-// VARS
-const repositoryRawURL = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/';
-const LICHESS_API = "https://lichess.org/api/cloud-eval";
-const CHESS_COM = 0;
-const LICHESS_ORG = 1;
-const TURN_UPDATE_FIX = false;
+const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
+// Engine index → resource name mapping (index 4 = node server)
+const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js'];
+const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess'];
+const node_engine_id    = ENGINE_RESOURCES.length; // index 4
 
-const MAX_DEPTH = 20;
-const MIN_DEPTH = 1;
-const MAX_MOVETIME = 2000;
-const MIN_MOVETIME = 50;
-const MAX_ELO = 3500;
-const DEPTH_MODE = 0;
-const MOVETIME_MODE = 1;
-const rank = ["Beginner", "Intermediate", "Advanced", "Expert", "Master", "Grand Master"];
+const best_move_color                = [0,   0,   250, 0.5];
+const opposite_best_move_color       = [250, 0,   0,   0.5];
+const possible_moves_colors          = [[200,180,0,0.9],[150,180,0,0.9],[100,180,0,0.9],[50,180,0,0.9]];
+const opposite_possible_moves_colors = [[250,200,200,0.9],[250,150,150,0.9],[250,100,100,0.9],[250,50,50,0.9]];
+const defaultFromSquareStyle = 'border:4px solid rgb(0 0 0/50%);';
+const defaultToSquareStyle   = 'border:4px dashed rgb(0 0 0/50%);';
 
-
-
-
-var nightMode = false;
-var engineMode = 0;                                         // engine mode (0:depth / 1:movetime)
-var engineIndex = 0;                                        // engine index (lozza => 0, stockfish => 1...)
-var reload_every = 10;                                      // reload engine after x moves
-var reload_engine = false;                                      // reload engine
-var enableUserLog = true;                                   // enable interface log
-var enableEngineLog = true;                                 // enable engine log
-var displayMovesOnSite = false;                              // display moves on chess board
-var show_opposite_moves = false;                            // show opponent best moves if available
-var use_book_moves = false;                                 // use lichess api to get book moves
-var node_engine_url = "http://localhost:5000";              // node server api url
-var node_engine_name = "stockfish-15.exe"                   // default engine name (node server engine only)
-var current_depth = Math.round(MAX_DEPTH / 2);              // current engine depth
-var current_movetime = Math.round(MAX_MOVETIME / 3);        // current engine move time
-var max_best_moves = 1;
-
-var lastBestMoveID = 0;
-
-
-
-const dbValues = {
-    nightMode: 'nightMode',
-    engineMode: 'engineMode',
-    engineIndex: 'engineIndex',
-    reload_every: 'reload_every',
-    reload_engine: 'reload_engine',
-    enableUserLog: 'enableUserLog',
-    enableEngineLog: 'enableEngineLog',
-    displayMovesOnSite: 'displayMovesOnSite',
-    show_opposite_moves: "show_opposite_moves",
-    use_book_moves: "use_book_moves",
-    node_engine_url: "node_engine_url",
-    node_engine_name: "node_engine_name",
-    current_depth: "current_depth",
-    current_movetime: "current_movetime",
-    max_best_moves: "max_best_moves"
+// GM storage keys
+const DB = {
+    nightMode:'nightMode', engineMode:'engineMode', engineIndex:'engineIndex',
+    reload_every:'reload_every', reload_engine:'reload_engine',
+    enableUserLog:'enableUserLog', enableEngineLog:'enableEngineLog',
+    displayMovesOnSite:'displayMovesOnSite', show_opposite_moves:'show_opposite_moves',
+    use_book_moves:'use_book_moves', node_engine_url:'node_engine_url',
+    node_engine_name:'node_engine_name', current_depth:'current_depth',
+    current_movetime:'current_movetime', max_best_moves:'max_best_moves'
 };
 
-
-var Gui;
-var closedGui = false;
-var reload_count = 1;
-var node_engine_id = 3;
-var Interface = null;
-var LozzaUtils = null;
-var CURRENT_SITE = null;
-var boardElem = null;
-var firstPieceElem = null;
-const MAX_LOGS = 50;
-
-
-var initialized = false;
-var firstMoveMade = false;
-
-var forcedBestMove = false;
-var engine = null;
-var engineObjectURL = null;
-var lastEngine = engineIndex;
-
-var chessBoardElem = null;
-var turn = '-';
-var last_turn = null;
-var playerColor = null;
-var lastPlayerColor = null;
-var isPlayerTurn = null;
-var lastFen = null;
-
-var uiChessBoard = null;
-
-var activeGuiMoveHighlights = [];
-var activeSiteMoveHighlights = [];
-
-var engineLogNum = 1;
-var userscriptLogNum = 1;
-var enemyScore = 0;
-var myScore = 0;
-
-var possible_moves = [];
-
-
-// style
-const best_move_color = [0, 0, 250, 0.5];
-const opposite_best_move_color = [250, 0, 0, 0.5];
-const possible_moves_colors = [
-    //[r,g,b,a]
-    [200, 180, 0, 0.9],
-    [150, 180, 0, 0.9],
-    [100, 180, 0, 0.9],
-    [50, 180, 0, 0.9]
-]
-const opposite_possible_moves_colors = [
-    //[r,g,b,a]
-    [250, 200, 200, 0.9],
-    [250, 150, 150, 0.9],
-    [250, 100, 100, 0.9],
-    [250, 50, 50, 0.9]
-]
-const defaultFromSquareStyle = 'border: 4px solid rgb(0 0 0 / 50%);';
-const defaultToSquareStyle = 'border: 4px dashed rgb(0 0 0 / 50%);';
-
-
-function moveResult(from, to, power, clear = true) {
-    if (from.length < 2 || to.length < 2) {
-        return;
-    }
-
-    if (clear) {
-        clearBoard();
-    }
-
-
-    if (!forcedBestMove) {
-        if (isPlayerTurn) // my turn
-            myScore = myScore + Number(power);
-        else
-            enemyScore = enemyScore + Number(power);
-
-        Interface.boardUtils.updateBoardPower(myScore, enemyScore);
-    } else {
-        forcedBestMove = false;
-        Gui.document.querySelector('#bestmove-btn').disabled = false;
-    }
-
-
-
-    // remove duplicated best moves
-    possible_moves = removeDuplicates(possible_moves).slice(0, max_best_moves - 1);
-
-    for (let a = 0; a < possible_moves.length; a++) {
-        Interface.boardUtils.markMove(possible_moves[a].slice(0, 2), possible_moves[a].slice(2, 4), (isPlayerTurn ? possible_moves_colors[a] : opposite_possible_moves_colors[a]));
-    }
-
-    Interface.boardUtils.markMove(from, to, (isPlayerTurn ? best_move_color : opposite_best_move_color));
-
-
-
-    Interface.stopBestMoveProcessingAnimation();
-}
-
-
-
-function getBookMoves(request) {
-
-    GM_xmlhttpRequest({
-        method: "GET",
-        url: LICHESS_API + "?fen=" + request.fen + "&multiPv=1&variant=fromPosition",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        onload: function (response) {
-            if (response.response.includes("error") || !response.ok) {
-                if (lastBestMoveID != request.id) {
-                    return;
-                }
-                getBestMoves(request);
-            } else {
-                if (lastBestMoveID != request.id) {
-                    return;
-                }
-
-                let data = JSON.parse(response.response);
-                let nextMove = data.pvs[0].moves.split(' ')[0];
-
-
-
-                moveResult(nextMove.slice(0, 2), nextMove.slice(2, 4), current_depth, true);
-            }
-
-
-        }, onerror: function (error) {
-            if (lastBestMoveID != request.id) {
-                return;
-            }
-            getBestMoves(request);
-
-        }
-    });
-
-}
-
-function getNodeBestMoves(request) {
-    GM_xmlhttpRequest({
-        method: "GET",
-        url: node_engine_url + "/getBestMove?fen=" + request.fen + "&engine_mode=" + engineMode + "&depth=" + current_depth + "&movetime=" + current_movetime + "&turn=" + (last_turn || turn) + "&engine_name=" + node_engine_name,
-        headers: {
-            "Content-Type": "application/json"
-        },
-        onload: function (response) {
-            if (response.response == "false") {
-                forcedBestMove = false;
-                Gui.document.querySelector('#bestmove-btn').disabled = false;
-                return Interface.log("check node server logs !!");
-            }
-
-            if (lastBestMoveID != request.id) {
-                return;
-            }
-
-
-            let data = JSON.parse(response.response);
-            let server_fen = data.fen;
-            let depth = data.depth;
-            let movetime = data.movetime;
-            let power = data.score;
-            let move = data.move;
-
-
-
-            if (engineMode == DEPTH_MODE) {
-                Interface.updateBestMoveProgress(`Depth: ${depth}`);
-            } else {
-                Interface.updateBestMoveProgress(`Move time: ${movetime} ms`);
-            }
-
-
-
-            moveResult(move.slice(0, 2), move.slice(2, 4), power, true);
-        }, onerror: function (error) {
-            forcedBestMove = false;
-            Gui.document.querySelector('#bestmove-btn').disabled = false;
-            Interface.log("make sure node server is running !!");
-        }
-    });
-
-}
-
-function getElo() {
-    let elo;
-    if (engineMode == DEPTH_MODE) {
-        elo = MAX_ELO / MAX_DEPTH;
-        elo *= current_depth;
-    } else {
-        elo = MAX_ELO / MAX_MOVETIME;
-        elo *= current_movetime;
-    }
-    elo = Math.round(elo);
-
-    return elo;
-}
-
-function getRank() {
-    let part;
-    if (engineMode == DEPTH_MODE) {
-        part = current_depth / (MAX_DEPTH / rank.length);
-    } else {
-        part = current_movetime / (MAX_MOVETIME / rank.length);
-    }
-    part = Math.round(part);
-
-    if (part >= rank.length) {
-        part = rank.length - 1;
-    }
-
-    return rank[part];
-}
-
-
-
-function setEloDescription(eloElem) {
-    eloElem.querySelector("#value").innerText = `Elo: ${getElo()}`;
-    eloElem.querySelector("#rank").innerText = `Rank: ${getRank()}`;
-    eloElem.querySelector("#power").innerText = engineMode == DEPTH_MODE ? `Depth: ${current_depth}` : `Move Time: ${current_movetime}`;
-}
-
-
-
-
-function isNotCompatibleBrowser() {
-    return navigator.userAgent.toLowerCase().includes("firefox")
-}
-
-onload = function () {
-    if (isNotCompatibleBrowser()) {
-        Gui = new UserGui;
-    }
-
-}
-
-if (!isNotCompatibleBrowser()) {
-    Gui = new UserGui;
-} else {
-    onload();
-}
-
-
-Gui.settings.window.title = 'Smart Chess Bot';
+// ─── Mutable state ────────────────────────────────────────────────────────────
+let nightMode           = false;
+let engineMode          = 0;
+let engineIndex         = 0;
+let reload_every        = 10;
+let reload_engine       = false;
+let enableUserLog       = true;
+let enableEngineLog     = true;
+let displayMovesOnSite  = false;
+let show_opposite_moves = false;
+let use_book_moves      = false;
+let node_engine_url     = 'http://localhost:5000';
+let node_engine_name    = 'stockfish-15.exe';
+let current_depth       = Math.round(MAX_DEPTH / 2);
+let current_movetime    = Math.round(MAX_MOVETIME / 3);
+let max_best_moves      = 1;
+
+let lastBestMoveID      = 0;
+let guiPagesAdded       = false;
+let closedGui           = false;
+let reload_count        = 1;
+
+let Interface           = null;
+let CURRENT_SITE        = null;
+let boardElem           = null;
+let firstPieceElem      = null;
+let forcedBestMove      = false;
+let engine              = null;
+let engineObjectURL     = null;
+
+let chessBoardElem      = null;
+let turn                = '-';
+let last_turn           = null;
+let playerColor         = null;
+let lastPlayerColor     = null;
+let isPlayerTurn        = null;
+let lastFen             = null;
+
+let activeGuiMoveHighlights  = [];
+let activeSiteMoveHighlights = [];
+let possible_moves           = [];
+
+let engineLogNum        = 1;
+let userscriptLogNum    = 1;
+let enemyScore          = 0;
+let myScore             = 0;
+
+// ─── GUI singleton ────────────────────────────────────────────────────────────
+const Gui = new UserGui();
+Gui.settings.window.title    = 'Smart Chess Bot';
 Gui.settings.window.external = true;
-Gui.settings.window.size.width = 500;
-Gui.settings.gui.external.popup = true;
+Gui.settings.window.size     = { width: 500, height: 620 };
+Gui.settings.gui.external    = { popup: true, style: '' };
+
+// Inject chessboard.css + layout overrides into the popup's <style>
 Gui.settings.gui.external.style += GM_getResourceText('chessboard.css');
 Gui.settings.gui.external.style += `
-div[class^='board'] {
-    background-color: black;
-}
-body {
-    display: block;
-    margin-left: auto;
-    margin-right: auto;
-    width: 360px;
-}
-#fen {
-    margin-left: 10px;
-}
-#engine-log-container {
-    max-height: 35vh;
-    overflow: auto!important;
-}
-#userscript-log-container {
-    max-height: 35vh;
-    overflow: auto!important;
-}
-.sideways-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.rendered-form .card {
-    margin-bottom: 10px;
-}
-.hidden {
-    display: none;
-}
-.main-title-bar {
-    display: flex;
-    justify-content: space-between;
-}
+</style><style>
+div[class^='board'] { background-color:#000; }
+body { display:block; margin:0 auto; width:360px; }
+#fen { margin-left:10px; }
+#engine-log-container,
+#userscript-log-container { max-height:30vh; overflow:auto !important; }
+.sideways-card { display:flex; align-items:center; justify-content:space-between; }
+.rendered-form .card { margin-bottom:10px; }
+.hidden { display:none; }
+.main-title-bar { display:flex; justify-content:space-between; }
 @keyframes wiggle {
-    0% { transform: scale(1); }
-   80% { transform: scale(1); }
-   85% { transform: scale(1.1); }
-   95% { transform: scale(1); }
-  100% { transform: scale(1); }
+  0%,80%  { transform:scale(1);   }
+  85%     { transform:scale(1.1); }
+  95%,100%{ transform:scale(1);   }
 }
-
-.wiggle {
-  display: inline-block;
-  animation: wiggle 1s infinite;
-}
+.wiggle { display:inline-block; animation:wiggle 1s infinite; }
 `;
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const isFirefox         = () => navigator.userAgent.toLowerCase().includes('firefox');
+const alphabetPosition  = ch => ch.charCodeAt(0) - 97;
+const removeDuplicates  = arr => [...new Set(arr)];
+const sleep             = ms => new Promise(r => setTimeout(r, ms));
 
-function alphabetPosition(text) {
-    return text.charCodeAt(0) - 97;
+function fenSquareToChessComSquare(sq) {
+    const [x, y] = sq.split('');
+    return `square-${'abcdefgh'.indexOf(x) + 1}${y}`;
 }
 
-
+// ─── FenUtils ─────────────────────────────────────────────────────────────────
 function FenUtils() {
-    this.board = [
-        [1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1],
-    ];
+    // Fresh 8×8 board filled with 1 (empty)
+    this.board = Array.from({ length: 8 }, () => Array(8).fill(1));
 
-    this.pieceCodeToFen = pieceStr => {
-        let [pieceColor, pieceName] = pieceStr.split('');
+    this.pieceCodeToFen = str => {
+        const [color, name] = str.split('');
+        return color === 'w' ? name.toUpperCase() : name.toLowerCase();
+    };
 
-        return pieceColor == 'w' ? pieceName.toUpperCase() : pieceName.toLowerCase();
-    }
-
-    this.getFenCodeFromPieceElem = pieceElem => {
-        if (CURRENT_SITE == CHESS_COM) {
-            return this.pieceCodeToFen([...pieceElem.classList].find(x => x.match(/^(b|w)[prnbqk]{1}$/)));
-        } else if (CURRENT_SITE == LICHESS_ORG) {
-            let [pieceColor, pieceName] = pieceElem.cgPiece.split(' ');
-
-            // fix pieceName
-            if (pieceName == "knight") {
-                pieceName = "n"
-            }
-
-            let pieceText = pieceColor[0] + pieceName[0];
-            return this.pieceCodeToFen(pieceText)
+    /**
+     * Returns the FEN character for a piece element on the LIVE BOARD.
+     * Chess.com pieces have classes like "wp", "bk", "wn" etc.
+     * Lichess pieces expose `.cgPiece` as e.g. "white king".
+     * Returns null if the element has no recognizable color class yet
+     * (e.g. animation ghost) — callers must guard for null.
+     */
+    this.getFenCodeFromPieceElem = elem => {
+        if (CURRENT_SITE === CHESS_COM) {
+            // class list contains e.g. "piece wp square-44" — match the 2-char color+piece token
+            const cls = [...elem.classList].find(c => /^(b|w)[prnbqk]$/.test(c));
+            if (!cls) return null;
+            return this.pieceCodeToFen(cls);
+        } else if (CURRENT_SITE === LICHESS_ORG) {
+            const cp = elem.cgPiece;
+            if (!cp) return null;
+            const [color, name] = cp.split(' ');
+            return this.pieceCodeToFen(color[0] + (name === 'knight' ? 'n' : name[0]));
         }
-    }
+        return null;
+    };
 
-    this.getPieceColor = pieceFenStr => {
-        return pieceFenStr == pieceFenStr.toUpperCase() ? 'w' : 'b';
-    }
+    this.getPieceColor         = s => (s === s.toUpperCase() ? 'w' : 'b');
+    this.getPieceOppositeColor = s => (this.getPieceColor(s) === 'w' ? 'b' : 'w');
 
-    this.getPieceOppositeColor = pieceFenStr => {
-        return this.getPieceColor(pieceFenStr) == 'w' ? 'b' : 'w';
-    }
-
-    this.squeezeEmptySquares = fenStr => {
-        return fenStr.replace(/11111111/g, '8')
-            .replace(/1111111/g, '7')
-            .replace(/111111/g, '6')
-            .replace(/11111/g, '5')
-            .replace(/1111/g, '4')
-            .replace(/111/g, '3')
-            .replace(/11/g, '2');
-    }
+    this.squeezeEmptySquares = fen =>
+        fen.replace(/11111111/g,'8').replace(/1111111/g,'7').replace(/111111/g,'6')
+           .replace(/11111/g,'5').replace(/1111/g,'4').replace(/111/g,'3').replace(/11/g,'2');
 
     this.posToIndex = pos => {
-        let [x, y] = pos.split('');
-
-        return { 'y': 8 - y, 'x': 'abcdefgh'.indexOf(x) };
-    }
+        const [x, y] = pos.split('');
+        return { y: 8 - Number(y), x: 'abcdefgh'.indexOf(x) };
+    };
 
     this.getBoardPiece = pos => {
-        let indexObj = this.posToIndex(pos);
-
-        return this.board[indexObj.y][indexObj.x];
-    }
+        const { y, x } = this.posToIndex(pos);
+        return this.board[y][x];
+    };
 
     this.getRights = () => {
-        let rights = '';
-
-        // check for white
-        let e1 = this.getBoardPiece('e1'),
-            h1 = this.getBoardPiece('h1'),
-            a1 = this.getBoardPiece('a1');
-
-        if (e1 == 'K' && h1 == 'R') rights += 'K';
-        if (e1 == 'K' && a1 == 'R') rights += 'Q';
-
-        //check for black
-        let e8 = this.getBoardPiece('e8'),
-            h8 = this.getBoardPiece('h8'),
-            a8 = this.getBoardPiece('a8');
-
-        if (e8 == 'k' && h8 == 'r') rights += 'k';
-        if (e8 == 'k' && a8 == 'r') rights += 'q';
-
-        return rights ? rights : '-';
-    }
-
-
-
+        let r = '';
+        const [e1,h1,a1,e8,h8,a8] = ['e1','h1','a1','e8','h8','a8'].map(p => this.getBoardPiece(p));
+        if (e1==='K' && h1==='R') r += 'K';
+        if (e1==='K' && a1==='R') r += 'Q';
+        if (e8==='k' && h8==='r') r += 'k';
+        if (e8==='k' && a8==='r') r += 'q';
+        return r || '-';
+    };
 
     this.getBasicFen = () => {
-        let pieceElems = null;
+        const sel = CURRENT_SITE === CHESS_COM ? '.piece' : 'piece';
+        [...chessBoardElem.querySelectorAll(sel)]
+            .filter(e => !e.classList.contains('ghost'))
+            .forEach(e => {
+                const code = this.getFenCodeFromPieceElem(e);
+                if (code === null) return; // skip ghosts / animating pieces with no color yet
 
-        if (CURRENT_SITE == CHESS_COM) {
-            pieceElems = [...chessBoardElem.querySelectorAll('.piece')];
-        } else if (CURRENT_SITE == LICHESS_ORG) {
-            pieceElems = [...chessBoardElem.querySelectorAll('piece')];
-        }
+                if (CURRENT_SITE === CHESS_COM) {
+                    const m = e.className.match(/square-(\d)(\d)/);
+                    if (!m) return;
+                    this.board[8 - Number(m[2])][Number(m[1]) - 1] = code;
+                } else {
+                    const key = e.cgKey;
+                    if (!key) return;
+                    const [x, y] = key.split('');
+                    this.board[8 - Number(y)][alphabetPosition(x)] = code;
+                }
+            });
+        return this.squeezeEmptySquares(this.board.map(r => r.join('')).join('/'));
+    };
 
-
-        pieceElems.filter(pieceElem => !pieceElem.classList.contains("ghost")).forEach(pieceElem => {
-            let pieceFenCode = this.getFenCodeFromPieceElem(pieceElem);
-
-
-
-            if (CURRENT_SITE == CHESS_COM) {
-                let [xPos, yPos] = pieceElem.classList.toString().match(/square-(\d)(\d)/).slice(1);
-
-                this.board[8 - yPos][xPos - 1] = pieceFenCode;
-            } else if (CURRENT_SITE == LICHESS_ORG) {
-                let [xPos, yPos] = pieceElem.cgKey.split('');
-
-                this.board[8 - yPos][alphabetPosition(xPos)] = pieceFenCode;
-            }
-        });
-
-        let basicFen = this.squeezeEmptySquares(this.board.map(x => x.join('')).join('/'));
-
-
-
-        return basicFen;
-    }
-
-
-    this.getFen = () => {
-        let basicFen = this.getBasicFen();
-        let rights = this.getRights();
-
-        return `${basicFen} ${last_turn || turn} ${rights} - 0 1`;
-    }
+    this.getFen = () => `${this.getBasicFen()} ${last_turn || turn} ${this.getRights()} - 0 1`;
 }
 
-
-
+// ─── InterfaceUtils ───────────────────────────────────────────────────────────
 function InterfaceUtils() {
+    // Single-element query cache keyed by CSS selector string
+    const cache = {};
+    const $  = sel => Gui.document && (cache[sel] !== undefined ? cache[sel] : (cache[sel] = Gui.document.querySelector(sel)));
+
     this.boardUtils = {
-        findSquareElem: (squareCode) => {
+        findSquareElem: code => Gui.document?.querySelector(`.square-${code}`),
+
+        markMove: (from, to, color) => {
             if (!Gui?.document) return;
-
-            return Gui.document.querySelector(`.square-${squareCode}`);
-        },
-        markMove: (fromSquare, toSquare, rgba_color) => {
-            if (!Gui?.document) return;
-
-            let fromElem = null;
-            let toElem = null;
-
-
-            if (CURRENT_SITE == CHESS_COM) {
-                fromElem = this.boardUtils.findSquareElem(fromSquare);
-                toElem = this.boardUtils.findSquareElem(toSquare);
-
-
-                if (!isNotCompatibleBrowser()) {
-                    fromElem.style.scale = 0.8;
-                    toElem.style.scale = 0.9;
-                    fromElem.style.backgroundColor = `rgb(${rgba_color[0]},${rgba_color[1]},${rgba_color[2]})`;
-                    toElem.style.backgroundColor = `rgb(${rgba_color[0]},${rgba_color[1]},${rgba_color[2]})`;
-
-
-
-                    activeGuiMoveHighlights.push(fromElem);
-                    activeGuiMoveHighlights.push(toElem);
-                }
-
+            if (CURRENT_SITE === CHESS_COM && !isFirefox()) {
+                [from, to].forEach((sq, i) => {
+                    const el = this.boardUtils.findSquareElem(sq);
+                    if (!el) return;
+                    el.style.scale = i === 0 ? '0.8' : '0.9';
+                    el.style.backgroundColor = `rgb(${color[0]},${color[1]},${color[2]})`;
+                    activeGuiMoveHighlights.push(el);
+                });
             }
-
-            if (displayMovesOnSite || (!isPlayerTurn && show_opposite_moves)) {
-                markMoveToSite(fromSquare, toSquare, rgba_color);
-            }
+            if (displayMovesOnSite || (!isPlayerTurn && show_opposite_moves))
+                markMoveToSite(from, to, color);
         },
+
         removeBestMarkings: () => {
-            if (!Gui?.document) return;
-
-            activeGuiMoveHighlights.forEach(elem => {
-                elem.style.scale = 1.0;
-                elem.style.backgroundColor = "";
+            activeGuiMoveHighlights.forEach(el => {
+                el.style.scale = '1';
+                el.style.backgroundColor = '';
             });
-
             activeGuiMoveHighlights = [];
         },
+
         updateBoardFen: fen => {
-            if (!Gui?.document) return;
-
-            Gui.document.querySelector('#fen').textContent = fen.slice(0, fen.lastIndexOf('-') - 1);
+            const el = $('#fen');
+            if (el) el.textContent = fen.slice(0, fen.lastIndexOf('-') - 1);
         },
-        updateBoardPower: (myScore, enemyScore) => {
-            if (!Gui?.document) return;
 
-            Gui.document.querySelector('#enemy-score').textContent = enemyScore;
-            Gui.document.querySelector('#my-score').textContent = myScore;
+        updateBoardPower: (my, enemy) => {
+            const es = $('#enemy-score'), ms = $('#my-score');
+            if (es) es.textContent = enemy;
+            if (ms) ms.textContent = my;
         },
-        updateBoardOrientation: orientation => {
-            if (!Gui?.document) return;
 
-            const orientationElem = Gui?.document?.querySelector('#orientation');
-
-            if (orientationElem) {
-                orientationElem.textContent = orientation;
-            }
+        updateBoardOrientation: o => {
+            const el = $('#orientation');
+            if (el) el.textContent = o;
         }
-    }
+    };
 
-    this.engineLog = str => {
-        if (!Gui?.document || enableEngineLog == false) return;
+    // Shared log helper
+    const appendLog = (containerId, str, num) => {
+        const container = Gui.document?.querySelector(containerId);
+        if (!container) return;
+        const el = document.createElement('div');
+        el.classList.add('list-group-item');
+        if (str.includes('info'))     el.classList.add('list-group-item-info');
+        if (str.includes('bestmove')) el.classList.add('list-group-item-success');
+        el.innerText = `#${num} ${str}`;
+        if (container.children.length >= MAX_LOGS) container.lastChild.remove();
+        container.prepend(el);
+    };
 
-        const logElem = document.createElement('div');
-        logElem.classList.add('list-group-item');
-
-        if (str.includes('info')) logElem.classList.add('list-group-item-info');
-        if (str.includes('bestmove')) logElem.classList.add('list-group-item-success');
-
-        logElem.innerText = `#${engineLogNum++} ${str}`;
-
-        if (engineLogNum > MAX_LOGS) {
-            Gui.document.querySelector('#engine-log-container').lastChild.remove();
-        }
-
-        Gui.document.querySelector('#engine-log-container').prepend(logElem);
-
-
-    }
-
-    this.log = str => {
-        if (!Gui?.document || enableUserLog == false) return;
-
-        const logElem = document.createElement('div');
-        logElem.classList.add('list-group-item');
-
-        if (str.includes('info')) logElem.classList.add('list-group-item-info');
-        if (str.includes('bestmove')) logElem.classList.add('list-group-item-success');
-
-        const container = Gui?.document?.querySelector('#userscript-log-container');
-
-        if (container) {
-            logElem.innerText = `#${userscriptLogNum++} ${str}`;
-
-            if (userscriptLogNum > MAX_LOGS) {
-                container.lastChild.remove();
-            }
-
-
-            container.prepend(logElem);
-        }
-    }
+    this.engineLog = str => { if (enableEngineLog) appendLog('#engine-log-container', str, engineLogNum++); };
+    this.log       = str => { if (enableUserLog)   appendLog('#userscript-log-container', str, userscriptLogNum++); };
 
     this.getBoardOrientation = () => {
-        if (CURRENT_SITE == CHESS_COM) {
-            return document.querySelector('.board.flipped') ? 'b' : 'w';
-        } else if (CURRENT_SITE == LICHESS_ORG) {
-            return document.querySelector(".orientation-white") !== null ? 'w' : 'b'
-        }
+        if (CURRENT_SITE === CHESS_COM)   return document.querySelector('.board.flipped') ? 'b' : 'w';
+        if (CURRENT_SITE === LICHESS_ORG) return document.querySelector('.orientation-white') ? 'w' : 'b';
+        return 'w';
+    };
 
-    }
+    const progressBar = () => $('#best-move-progress');
 
     this.updateBestMoveProgress = text => {
-        if (!Gui?.document || isNotCompatibleBrowser() || CURRENT_SITE === LICHESS_ORG) return;
-
-        const progressBarElem = Gui.document.querySelector('#best-move-progress');
-
-        progressBarElem.innerText = text;
-
-        progressBarElem.classList.remove('hidden');
-        progressBarElem.classList.add('wiggle');
-    }
+        if (!Gui?.document || isFirefox() || CURRENT_SITE === LICHESS_ORG) return;
+        const el = progressBar();
+        if (!el) return;
+        el.innerText = text;
+        el.classList.remove('hidden');
+        el.classList.add('wiggle');
+    };
 
     this.stopBestMoveProcessingAnimation = () => {
-        if (!Gui?.document || isNotCompatibleBrowser() || CURRENT_SITE === LICHESS_ORG) return;
-
-        const progressBarElem = Gui.document.querySelector('#best-move-progress');
-
-        progressBarElem.classList.remove('wiggle');
-    }
+        if (!Gui?.document || isFirefox() || CURRENT_SITE === LICHESS_ORG) return;
+        progressBar()?.classList.remove('wiggle');
+    };
 
     this.hideBestMoveProgress = () => {
-        if (!Gui?.document || isNotCompatibleBrowser() || CURRENT_SITE === LICHESS_ORG) return;
-
-        const progressBarElem = Gui.document.querySelector('#best-move-progress');
-
-        if (!progressBarElem.classList.contains('hidden')) {
-            progressBarElem.classList.add('hidden');
-            this.stopBestMoveProcessingAnimation();
+        if (!Gui?.document || isFirefox() || CURRENT_SITE === LICHESS_ORG) return;
+        const el = progressBar();
+        if (el && !el.classList.contains('hidden')) {
+            el.classList.add('hidden');
+            el.classList.remove('wiggle');
         }
-    }
+    };
 }
 
 function LozzaUtility() {
-    this.separateMoveCodes = moveCode => {
-        moveCode = moveCode.trim();
-
-        let move = moveCode.split(' ')[1];
-
-        return [move.slice(0, 2), move.slice(2, 4)];
-    }
-
-    this.extractInfo = str => {
-
-        const keys = ['time', 'nps', 'depth', 'pv'];
-
-        return keys.reduce((acc, key) => {
-            let match = str.match(`${key} (\\d+)`);
-
-
-            if (match) {
-                acc[key] = (match[1]);
-            }
-
+    this.extractInfo = str =>
+        ['time','nps','depth','pv'].reduce((acc, key) => {
+            const m = str.match(`${key} (\\d+)`);
+            if (m) acc[key] = m[1];
             return acc;
         }, {});
-    }
 }
 
-function fenSquareToChessComSquare(fenSquareCode) {
-    const [x, y] = fenSquareCode.split('');
-
-    return `square-${['abcdefgh'.indexOf(x) + 1]}${y}`;
-}
-
-function markMoveToSite(fromSquare, toSquare, rgba_color) {
-    const highlight = (fenSquareCode, style, rgba_color) => {
-
-        let squareClass = highlightElem = existingHighLight = parentElem = null
-
-        if (CURRENT_SITE == CHESS_COM) {
-            squareClass = fenSquareToChessComSquare(fenSquareCode);
-
-            highlightElem = document.createElement('div');
-            highlightElem.classList.add('custom');
-            highlightElem.classList.add('highlight');
-            highlightElem.classList.add(squareClass);
-            highlightElem.dataset.testElement = 'highlight';
-            highlightElem.style = style;
-            highlightElem.style.backgroundColor = `rgba(${rgba_color[0]},${rgba_color[1]},${rgba_color[2]},${rgba_color[3]})`;
-
-
-            activeSiteMoveHighlights.push(highlightElem);
-
-
-            if (TURN_UPDATE_FIX == true) {
-                existingHighLight = document.querySelector(`.custom.highlight.${squareClass}`);
-            } else {
-                existingHighLight = document.querySelector(`.highlight.${squareClass}`);
-            }
-
-            if (existingHighLight) {
-                existingHighLight.remove();
-            }
-
-            parentElem = chessBoardElem;
-
-        } else if (CURRENT_SITE == LICHESS_ORG) {
-            let x_pos, y_pos
-            // check if flipped white: false  / black: true
-            let flipped = document.querySelector(".orientation-white") !== null ? false : true
-
-
-            let default_square_width = parseInt(chessBoardElem.querySelector("cg-container").style.width) / 8;
-            let default_square_height = parseInt(chessBoardElem.querySelector("cg-container").style.height) / 8;
-
-
-            if (!flipped) {
-                // player has white side
-                x_pos = alphabetPosition(fenSquareCode[0]) * default_square_width;
-                y_pos = (8 - Number(fenSquareCode[1])) * default_square_height;
-            } else {
-                // black side
-                x_pos = (7 - alphabetPosition(fenSquareCode[0])) * default_square_width;
-                y_pos = (Number(fenSquareCode[1]) - 1) * default_square_height;
-            }
-
-
-            highlightElem = document.createElement('square');
-            highlightElem.classList.add('custom');
-            highlightElem.classList.add('highlight');
-            highlightElem.dataset.testElement = 'highlight';
-            highlightElem.style = style;
-            highlightElem.style.backgroundColor = `rgba(${rgba_color[0]},${rgba_color[1]},${rgba_color[2]},${rgba_color[3]})`;
-
-
-            highlightElem.style.transform = `translate(${x_pos}px,${y_pos}px)`;
-            highlightElem.style.zIndex = 1;
-
-            activeSiteMoveHighlights.push(highlightElem);
-
-            parentElem = chessBoardElem.querySelector("cg-container");
+// ─── Site move highlighting ───────────────────────────────────────────────────
+function markMoveToSite(fromSq, toSq, rgba) {
+    const highlight = (sq, style) => {
+        if (CURRENT_SITE === CHESS_COM) {
+            const cls = fenSquareToChessComSquare(sq);
+            document.querySelector(`${TURN_UPDATE_FIX ? '.custom' : ''}.highlight.${cls}`)?.remove();
+            const el = document.createElement('div');
+            el.className = `custom highlight ${cls}`;
+            el.dataset.testElement = 'highlight';
+            el.style.cssText = style;
+            el.style.backgroundColor = `rgba(${rgba.join(',')})`;
+            activeSiteMoveHighlights.push(el);
+            chessBoardElem.prepend(el);
+        } else if (CURRENT_SITE === LICHESS_ORG) {
+            const cg = chessBoardElem.querySelector('cg-container');
+            const w = parseInt(cg.style.width)  / 8;
+            const h = parseInt(cg.style.height) / 8;
+            const flipped = !document.querySelector('.orientation-white');
+            const xi = alphabetPosition(sq[0]);
+            const yi = Number(sq[1]);
+            const x  = flipped ? (7 - xi) * w : xi * w;
+            const y  = flipped ? (yi - 1) * h : (8 - yi) * h;
+            const el = document.createElement('square');
+            el.className = 'custom highlight';
+            el.dataset.testElement = 'highlight';
+            el.style.cssText = style;
+            el.style.backgroundColor = `rgba(${rgba.join(',')})`;
+            el.style.transform = `translate(${x}px,${y}px)`;
+            el.style.zIndex = '1';
+            activeSiteMoveHighlights.push(el);
+            cg.prepend(el);
         }
-
-
-
-        parentElem.prepend(highlightElem);
-    }
-
-
-
-    highlight(fromSquare, defaultFromSquareStyle, rgba_color);
-    highlight(toSquare, defaultToSquareStyle, rgba_color);
+    };
+    highlight(fromSq, defaultFromSquareStyle);
+    highlight(toSq,   defaultToSquareStyle);
 }
 
 function removeSiteMoveMarkings() {
-    activeSiteMoveHighlights.forEach(elem => {
-        elem?.remove();
-    });
-
+    activeSiteMoveHighlights.forEach(el => el?.remove());
     activeSiteMoveHighlights = [];
 }
 
-
-
-
+// ─── Turn detection (chess.com fallback) ──────────────────────────────────────
 function getTurn() {
-
-    const getSquareNumber = (elem) => {
-        for (var a = 0; a < elem.classList.length; a++) {
-            if (elem.classList[a].includes("square")) {
-                return elem.classList[a];
-            }
-        }
-        return "";
-    }
-
-    const getSimiliarChessPiece = (squareNumber) => {
-        let similiarChessPieces = chessBoardElem.querySelectorAll("." + squareNumber);
-
-        for (var a = 0; a < similiarChessPieces.length; a++) {
-            if (similiarChessPieces[a].classList.contains("piece") == true) {
-                return similiarChessPieces[a];
-            }
-        }
-        return null;
-    }
-
-    const getChessPieceColor = (elem) => {
-        for (var a = 0; a < elem.classList.length; a++) {
-            if (elem.classList[a].length <= 2) {
-                if (elem.classList[a][0] == "b") {
-                    return "b";
-                } else {
-                    return "w";
-                }
-            }
-        }
-        return "";
-    }
-
-
-
     Interface.boardUtils.removeBestMarkings();
-
     removeSiteMoveMarkings();
+    for (const hl of chessBoardElem.querySelectorAll('.highlight')) {
+        if (hl.classList.contains('custom')) continue;
+        const sqCls = [...hl.classList].find(c => c.includes('square'));
+        if (!sqCls) return '';
+        const piece = chessBoardElem.querySelector(`.piece.${sqCls}`);
+        if (!piece) continue;
+        const colorCls = [...piece.classList].find(c => c.length <= 2);
+        if (!colorCls) return '';
+        return colorCls[0] === 'b' ? 'w' : 'b';
+    }
+    return '';
+}
 
+// ─── Elo / rank ───────────────────────────────────────────────────────────────
+function getElo() {
+    const ratio = engineMode === DEPTH_MODE ? current_depth / MAX_DEPTH : current_movetime / MAX_MOVETIME;
+    return Math.round(MAX_ELO * ratio);
+}
 
-    let chessPieces = chessBoardElem.querySelectorAll(".highlight");
+function getRank() {
+    const ratio = engineMode === DEPTH_MODE ? current_depth / MAX_DEPTH : current_movetime / MAX_MOVETIME;
+    const idx   = Math.min(Math.round(ratio * rank.length), rank.length - 1);
+    return rank[idx];
+}
 
-    for (var a = 0; a < chessPieces.length; a++) {
+function setEloDescription(eloElem) {
+    if (!eloElem) return;
+    eloElem.querySelector('#value').innerText = `Elo: ${getElo()}`;
+    eloElem.querySelector('#rank').innerText  = `Rank: ${getRank()}`;
+    eloElem.querySelector('#power').innerText = engineMode === DEPTH_MODE
+        ? `Depth: ${current_depth}` : `Move Time: ${current_movetime}`;
+}
 
-        // exclude custom highlighted squares
-        if (chessPieces[a].classList.contains("custom") == true) {
-            continue;
-        }
+// ─── Board/move core ──────────────────────────────────────────────────────────
+function clearBoard() {
+    Interface.stopBestMoveProcessingAnimation();
+    Interface.boardUtils.removeBestMarkings();
+    removeSiteMoveMarkings();
+}
 
+function moveResult(from, to, power, clear = true) {
+    if (!from || !to || from.length < 2 || to.length < 2) return;
+    if (clear) clearBoard();
 
-
-        let squareNumber = getSquareNumber(chessPieces[a]);
-        if (squareNumber == "") {
-            return "";
-        }
-
-
-
-        let similiarChessPiece = getSimiliarChessPiece(squareNumber);
-
-        if (similiarChessPiece == null) {
-            continue;
-        }
-
-
-
-        let chessPieceColor = getChessPieceColor(similiarChessPiece);
-
-        if (chessPieceColor == "") {
-            return "";
-        }
-
-
-
-
-        if (chessPieceColor == "b") {
-            return "w";
-        } else if (chessPieceColor == "w") {
-            return "b";
-        }
+    if (!forcedBestMove) {
+        if (isPlayerTurn) myScore += Number(power);
+        else              enemyScore += Number(power);
+        Interface.boardUtils.updateBoardPower(myScore, enemyScore);
+    } else {
+        forcedBestMove = false;
+        const btn = Gui.document?.querySelector('#bestmove-btn');
+        if (btn) btn.disabled = false;
     }
 
+    const extras = removeDuplicates(possible_moves).slice(0, max_best_moves - 1);
+    extras.forEach((mv, i) => {
+        Interface.boardUtils.markMove(
+            mv.slice(0,2), mv.slice(2,4),
+            isPlayerTurn ? possible_moves_colors[i] : opposite_possible_moves_colors[i]
+        );
+    });
+    Interface.boardUtils.markMove(from, to, isPlayerTurn ? best_move_color : opposite_best_move_color);
+    Interface.stopBestMoveProcessingAnimation();
+}
 
+const START_FEN_W = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const START_FEN_B = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1';
 
-    return "";
+function updateBoard(clear = true) {
+    if (clear) clearBoard();
+    const fen = new FenUtils().getFen();
+    if (fen === START_FEN_W || fen === START_FEN_B) {
+        enemyScore = myScore = 0;
+        Interface.boardUtils.updateBoardPower(0, 0);
+    }
+    isPlayerTurn = playerColor === null || last_turn === null || last_turn === playerColor;
+    Interface.boardUtils.updateBoardFen(fen);
+}
+
+function sendBestMove() {
+    if (!isPlayerTurn && !show_opposite_moves) return;
+    const fen = new FenUtils().getFen();
+    possible_moves = [];
+    lastBestMoveID++;
+    const req = { id: lastBestMoveID, fen };
+    reloadChessEngine(false, () => {
+        Interface.log('Sending best move request to engine...');
+        use_book_moves ? getBookMoves(req) : getBestMoves(req);
+    });
 }
 
 function updateBestMove(mutationArr) {
-    const FenUtil = new FenUtils();
-    let currentFen = FenUtil.getFen();
+    const fenUtil = new FenUtils();
+    const fen = fenUtil.getFen();
+    if (fen === lastFen) return;
+    lastFen = fen;
 
-
-    if (currentFen != lastFen) {
-        lastFen = currentFen;
-
-
-        if (mutationArr) {
-            let attributeMutationArr
-
-            if (CURRENT_SITE == CHESS_COM) {
-                attributeMutationArr = mutationArr.filter(m => m.target.classList.contains('piece') && m.attributeName == 'class');
-            } else if (CURRENT_SITE == LICHESS_ORG) {
-                attributeMutationArr = mutationArr.filter(m => m.target.tagName == 'PIECE' && !m.target.classList.contains('fading') && m.attributeName == 'class');
-            }
-
-
-
-            if (attributeMutationArr?.length) {
-                turn = FenUtil.getPieceOppositeColor(FenUtil.getFenCodeFromPieceElem(attributeMutationArr[0].target));
-
+    if (mutationArr) {
+        const attrMuts = mutationArr.filter(m =>
+            CURRENT_SITE === CHESS_COM
+                ? m.target.classList.contains('piece') && m.attributeName === 'class'
+                : m.target.tagName === 'PIECE' && !m.target.classList.contains('fading') && m.attributeName === 'class'
+        );
+        if (attrMuts.length) {
+            const code = fenUtil.getFenCodeFromPieceElem(attrMuts[0].target);
+            if (code !== null) {
+                turn = fenUtil.getPieceOppositeColor(code);
                 last_turn = turn;
-
-
-
-                // fix turn method
-                if (TURN_UPDATE_FIX && getTurn() != "") {
-                    turn = getTurn();
-                }
-
+                if (TURN_UPDATE_FIX && getTurn() !== '') turn = getTurn();
                 Interface.log(`Turn updated to ${turn}!`);
             }
         }
+    }
+    updateBoard();
+    sendBestMove();
+}
 
-
-        updateBoard();
-        sendBestMove();
+// ─── Engine requests ──────────────────────────────────────────────────────────
+function safeParseJSON(text) {
+    try {
+        const trimmed = (text || '').trim();
+        if (!trimmed || trimmed[0] === '<') return null; // HTML error page guard
+        return JSON.parse(trimmed);
+    } catch (_) {
+        return null;
     }
 }
 
-
-
-
-
-
-function sendBestMove() {
-    if (!isPlayerTurn && !show_opposite_moves) {
-        return;
-    }
-
-    sendBestMoveRequest();
+function resetBestMoveBtn() {
+    forcedBestMove = false;
+    const btn = Gui.document?.querySelector('#bestmove-btn');
+    if (btn) btn.disabled = false;
 }
 
-function sendBestMoveRequest() {
-    const FenUtil = new FenUtils();
-    let currentFen = FenUtil.getFen();
-    possible_moves = [];
-
-    reloadChessEngine(false, () => {
-        Interface.log('Sending best move request to the engine!');
-
-        lastBestMoveID++;
-
-
-        if (use_book_moves) {
-            getBookMoves({ id: lastBestMoveID, fen: currentFen });
-        } else {
-            getBestMoves({ id: lastBestMoveID, fen: currentFen });
-        }
+function getBookMoves(request) {
+    GM_xmlhttpRequest({
+        method: 'GET',
+        url: `${LICHESS_API}?fen=${encodeURIComponent(request.fen)}&multiPv=1&variant=fromPosition`,
+        headers: { 'Content-Type': 'application/json' },
+        onload: res => {
+            if (lastBestMoveID !== request.id) return;
+            const data = safeParseJSON(res.response);
+            if (!data || data.error || !res.ok || !data.pvs?.[0]?.moves) {
+                Interface.log('Book move unavailable, falling back to engine.');
+                return getBestMoves(request);
+            }
+            const move = data.pvs[0].moves.split(' ')[0];
+            if (!move || move.length < 4) return getBestMoves(request);
+            moveResult(move.slice(0,2), move.slice(2,4), current_depth, true);
+        },
+        onerror: () => { if (lastBestMoveID === request.id) getBestMoves(request); }
     });
 }
 
-
-
-
-function clearBoard() {
-    Interface.stopBestMoveProcessingAnimation();
-
-    Interface.boardUtils.removeBestMarkings();
-
-    removeSiteMoveMarkings();
-}
-function updateBoard(clear = true) {
-    if (clear)
-        clearBoard();
-
-    const FenUtil = new FenUtils();
-    let currentFen = FenUtil.getFen();
-
-    if (currentFen == ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") || currentFen == ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1")) {
-        enemyScore = 0;
-        myScore = 0;
-        Interface.boardUtils.updateBoardPower(myScore, enemyScore);
-    }
-
-    isPlayerTurn = playerColor == null || last_turn == null || last_turn == playerColor;
-
-
-    Interface.boardUtils.updateBoardFen(currentFen);
-}
-
-
-function removeDuplicates(arr) {
-    return arr.filter((item,
-        index) => arr.indexOf(item) === index);
-}
-
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function getNodeBestMoves(request) {
+    const url = `${node_engine_url}/getBestMove?fen=${encodeURIComponent(request.fen)}`
+        + `&engine_mode=${engineMode}&depth=${current_depth}&movetime=${current_movetime}`
+        + `&turn=${encodeURIComponent(last_turn || turn)}&engine_name=${encodeURIComponent(node_engine_name)}`;
+    GM_xmlhttpRequest({
+        method: 'GET', url,
+        headers: { 'Content-Type': 'application/json' },
+        onload: res => {
+            if (lastBestMoveID !== request.id) return;
+            if (res.response === 'false' || !res.ok) {
+                resetBestMoveBtn();
+                return Interface.log('check node/go server logs !!');
+            }
+            const data = safeParseJSON(res.response);
+            if (!data) {
+                resetBestMoveBtn();
+                Interface.log(`Server returned non-JSON: ${(res.response || '').slice(0, 80)}`);
+                return;
+            }
+            const { depth, movetime, score, move } = data;
+            if (!move || move.length < 4) {
+                resetBestMoveBtn();
+                Interface.log('Server returned invalid move.');
+                return;
+            }
+            Interface.updateBestMoveProgress(
+                engineMode === DEPTH_MODE ? `Depth: ${depth}` : `Move time: ${movetime} ms`);
+            moveResult(move.slice(0,2), move.slice(2,4), score, true);
+        },
+        onerror: () => {
+            resetBestMoveBtn();
+            Interface.log('make sure the server is running !!');
+        }
+    });
 }
 
 function getBestMoves(request) {
+    if (engineIndex === node_engine_id || CURRENT_SITE === LICHESS_ORG)
+        return getNodeBestMoves(request);
 
+    engine.postMessage(`position fen ${request.fen}`);
+    engine.postMessage(engineMode === DEPTH_MODE
+        ? `go depth ${current_depth}` : `go movetime ${current_movetime}`);
 
-    if (engineIndex != node_engine_id && CURRENT_SITE !== LICHESS_ORG) {
-        // local engines
-        while (!engine) {
-            sleep(100);
+    engine.onmessage = e => {
+        if (lastBestMoveID !== request.id) return;
+        const data = e.data;
+        if (data.includes('bestmove')) {
+            const move = data.split(' ')[1];
+            moveResult(move.slice(0,2), move.slice(2,4), current_depth, true);
+        } else if (data.includes('info')) {
+            const info = LozzaUtils.extractInfo(data);
+            const pvMove = data.slice(data.lastIndexOf('pv')).split(' ')[1];
+            if (pvMove) possible_moves.push(pvMove);
+            Interface.updateBestMoveProgress(
+                engineMode === DEPTH_MODE
+                    ? `Depth: ${info.depth || current_depth}`
+                    : `Move time: ${info.time || current_movetime} ms`);
         }
-
-        engine.postMessage(`position fen ${request.fen}`);
-
-        if (engineMode == DEPTH_MODE) {
-            engine.postMessage('go depth ' + current_depth);
-        } else {
-            engine.postMessage('go movetime ' + current_movetime);
-        }
-
-        engine.onmessage = e => {
-            if (lastBestMoveID != request.id) {
-                return;
-            }
-            if (e.data.includes('bestmove')) {
-                let move = e.data.split(' ')[1];
-
-
-
-                moveResult(move.slice(0, 2), move.slice(2, 4), current_depth, true);
-            }
-
-            else if (e.data.includes('info')) {
-
-                const infoObj = LozzaUtils.extractInfo(e.data);
-                let depth = infoObj.depth || current_depth;
-                let move_time = infoObj.time || current_movetime;
-
-                let possible_move = e.data.slice(e.data.lastIndexOf("pv"), e.data.length).split(" ")[1];
-                possible_moves.push(possible_move);
-
-
-
-                if (engineMode == DEPTH_MODE) {
-                    Interface.updateBestMoveProgress(`Depth: ${depth}`);
-                } else {
-                    Interface.updateBestMoveProgress(`Move time: ${move_time} ms`);
-                }
-
-            }
-            Interface.engineLog(e.data);
-        };
-
-    } else {
-        getNodeBestMoves(request);
-    }
+        Interface.engineLog(data);
+    };
 }
 
-var updatingBestMove = false;
-
-function observeNewMoves() {
-    updateBestMove();
-
-    const boardObserver = new MutationObserver(mutationArr => {
-        lastPlayerColor = playerColor;
-
-        updatePlayerColor(() => {
-            if (playerColor != lastPlayerColor) {
-                Interface.log(`Player color changed from ${lastPlayerColor} to ${playerColor}!`);
-
-                updateBestMove();
-            } else {
-                updateBestMove(mutationArr);
-            }
-        });
-
-
-    });
-
-    boardObserver.observe(chessBoardElem, { childList: true, subtree: true, attributes: true });
-}
-
-function addGuiPages() {
-    if (Gui?.document) return;
-
-    Gui.addPage("Main", `
-    <div class="rendered-form" id="main-tab">
-
-                <script>${CURRENT_SITE != LICHESS_ORG ? GM_getResourceText('jquery.js') : ""}</script>
-                <script>${CURRENT_SITE != LICHESS_ORG ? GM_getResourceText('chessboard.js') : ""}</script>
-
-        
-        <div class="card">
-            <div class="card-body" id="chessboard">
-                <div class="main-title-bar">
-                    <h4 class="card-title">Live Chessboard:</h4>
-                    <p class="card-title" id="best-move-progress"></p>
-                </div>
-
-                <div id="board" style="width: 447px"></div>
-            </div>
-            <div id="orientation" class="hidden"></div>
-            <div class="card-footer sideways-card"><input class="btn" type="button" value="Get Best Move" id="bestmove-btn"></input></div>
-            <div class="card-footer sideways-card">FEN :<div id="fen"></div></div>
-            <div class="card-footer sideways-card">ENEMY SCORE :<div id="enemy-score"></div></div>
-            <div class="card-footer sideways-card">MY SCORE : <div id="my-score"></div></div>
-        </div>
-        <script>
-        const orientationElem = document.querySelector('#orientation');
-        const fenElem = document.querySelector('#fen');
-
-        let board = ChessBoard('board', {
-            pieceTheme: '${repositoryRawURL}/content/chesspieces/{piece}.svg',
-            position: 'start',
-            orientation: '${playerColor == 'b' ? 'black' : 'white'}'
-        });
-
-        const orientationObserver = new MutationObserver(() => {
-            board = ChessBoard('board', {
-                pieceTheme: '${repositoryRawURL}/content/chesspieces/{piece}.svg',
-                position: fenElem.textContent,
-                orientation: orientationElem.textContent == 'b' ? 'black' : 'white'
-            });
-        });
-
-        const fenObserver = new MutationObserver(() => {
-            board.position(fenElem.textContent);
-        });
-
-        orientationObserver.observe(orientationElem, { attributes: true,  childList: true,  characterData: true });
-        fenObserver.observe(fenElem, { attributes: true,  childList: true,  characterData: true });
-        </script>
-    </div>
-    `);
-
-    Gui.addPage('Log', `
-    <div class="rendered-form" id="log-tab">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title">Userscript Log:</h4>
-                <ul class="list-group" id="userscript-log-container"></ul>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title">Engine Log</h4>
-                <ul class="list-group" id="engine-log-container"></ul>
-            </div>
-        </div>
-    </div>
-    `);
-
-
-
-
-
-
-
-    Gui.addPage('Settings', `
-    <style>
-        body{
-            display:grid;
-            justify-items: center;
-            background-color:#fff;
-
-            transition:0.2s;
-        }
-
-
-        body.night{
-            background-color:#312e2b;
-            transition:0.2s;
-        }
-
-
-
-        .rendered-form{
-            width:500px;
-        }
-
-        .card{
-            border: 3px solid rgba(0,0,0,.2) !important;
-            background-color:#fff;
-            transition:0.2s;
-        }
-        .card.night{
-            background-color:#545454;
-            transition:0.2s;
-        }
-
-
-
-        .card-title{
-            color:#000;
-            transition:0.2s;
-        }
-        .card-title.night{
-            color:#fff;
-            transition:0.2s;
-        }
-
-
-        .form-control{
-            color:#000;
-            background-color:#fff;
-            transition:0.2s;
-        }
-        .form-control.night{
-            color:#fff;
-            background-color:#525252;
-            transition:0.2s;
-        }
-
-
-        label,input{
-            color:#000;
-            transition:0.2s;
-        }
-        label.night,input.night{
-            color:#fff;
-            transition:0.2s;
-        }
-
-        input{
-            background-color:#fff;
-            transition:0.2s;
-        }
-        input.night{
-            background-color:#525252;
-            transition:0.2s;
-        }
-
-
-        .list-group div{
-            background-color:#fff;
-            transition:0.2s;
-        }
-        .list-group.night div{
-            background-color:#bbb;
-            transition:0.2s;
-        }
-
-
-
-        .card-footer{
-            color:#000;
-            font-weight:bold;
-            transition:0.2s;
-        }
-        .card-footer.night{
-            color:#fff;
-            transition:0.2s;
-        }
-
-        #fen{
-            color:#000;
-            font-size: 15px;
-            word-break: break-word;
-            transition:0.2s;
-        }
-        #fen.night{
-            color:#fff;
-            transition:0.2s;
-        }
-
-
-        .nav-tabs .nav-link:hover {
-            border-color: #454646  #454646  #454646;
-            isolation: isolate;
-        }
-        .nav-tabs .nav-link.night:hover {
-            border-color: #e9ecef #e9ecef #dee2e6;
-            isolation: isolate;
-        }
-
-        .nav-tabs .nav-link.active{
-            background-color:#bbb;
-        }
-        .nav-tabs .nav-link.active.night{
-            background-color:#fff;
-        }
-
-        .btn{
-            border-color:#bbb;
-            border-width:3px;
-            width:100%;
-            transition :0.2s;
-        }
-        .btn:hover{
-            background-color: #0d6efd;
-            transition :0.2s;
-        }
-        .btn:active{
-            background-color: #0c5acd;
-            transition :0.2s;
-        }
-
-        .space{
-            height:10px;
-        }
-
-        .form-control,.list-group{
-            border: 2px solid #0000004f !important;
-        }
-        #reload-count{
-            width:15%;
-        }
-        .nav-link{
-            font-weight:bold;
-        }
-		
-		.alert {
-			padding: 20px;
-			background-color: #f44336;
-			color: white;
-		}
-		
-		
-        .container {
-            display: block;
-            position: relative;
-            padding-left: 35px;
-            margin-bottom: 12px;
-            cursor: pointer;
-            font-size: 15px;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
-
-
-        .container input {
-            position: absolute;
-            opacity: 0;
-            cursor: pointer;
-            height: 0;
-            width: 0;
-        }
-
-        
-        .checkmark {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 25px;
-            width: 25px;
-            background-color: #eee;
-            outline:3px solid #bbb;
-        }
-
-        .checkmark.night{
-            outline:none;
-        }
-
-        .container:hover input ~ .checkmark {
-            background-color: #ccc;
-        }
-
-        
-        .container input:checked ~ .checkmark {
-            background-color: #2196F3;
-        }
-
-
-        .checkmark:after {
-            content: "";
-            position: absolute;
-            display: none;
-        }
-
-
-        .container input:checked ~ .checkmark:after {
-            display: block;
-        }
-
-        .container .checkmark:after {
-            width: 40%;
-            height: 70%;
-            margin-left: 1px;
-            border: solid white;
-            border-width: 0 3px 3px 0;
-            -webkit-transform: rotate(45deg);
-            -ms-transform: rotate(45deg);
-            transform: rotate(45deg);
-        }
-    </style>
-
-    <div class="rendered-form" id="settings-tab">
-
-    <div class="card">
-        <div class="card-body">
-            <h4 class="card-title">Main Settings:</h4>
-            <input class="btn" type="button" value="Reset Settings" id="reset-settings">
-            <div class="space"></div>
-            <input class="btn" type="button" value="${nightMode == true ? 'Disable Night Mode' : 'Enable Night Mode'}" id="night-mode">
-			<div class="space"></div>
-            <input class="btn" type="button" value="Tutorials / Support" id="tuto">
-        </div>
-    </div>
-
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title">Engine:</h4>
-                <div class="form-group field-select-engine">
-                    <select class="form-control" name="select-engine" id="select-engine">
-                        <option value="option-lozza" id="web-engine">Lozza</option>
-                        <option value="option-stockfish" id="web-engine">Stockfish 5</option>
-                        <option value="option-stockfish2" id="web-engine">Stockfish 2018</option>
-                        <option value="option-nodeserver" id="local-engine">Node Server Engines</option>
-                    </select>
-                </div>
-
-
-                <label class="container">Use book moves
-                    <input type="checkbox" id="use-book-moves" ${use_book_moves == true ? 'checked' : ''}>
-                    <span class="checkmark"></span>
-                </label>
-
-
-                <div id="reload-engine-div" style="display:${node_engine_id == engineIndex ? 'none' : 'block'};">
-
-
-                    <label class="container">Enable Engine Reload
-                        <input type="checkbox" id="reload-engine" ${reload_engine == true ? 'checked' : ''}>
-                        <span class="checkmark"></span>
-                    </label>
-
-                    <div id="reload-count-div" style="display:${reload_engine == true ? 'block' : 'none'};">
-                        <label for="reload-count">Reload Engine every</label>
-                        <input type="number" id="reload-count" value="${reload_every}">
-                        <label for="reload-count"> moves</label>
-                    </div>
-
-
-    
-                </div>
-
-
-
-				
-				<div id="node-engine-div" style="display:${(engineIndex == node_engine_id) ? 'block' : 'none'};">
-                    <div>
-                    <label for="engine-url">Engine URL:</label>
-                    <input type="text" id="engine-url" value="${node_engine_url}">
-                    </div>
-
-                    <div class="space"></div>
-                    <div>
-					<label for="engine-name">Engine Name:</label>
-					<input type="text" id="engine-name" value="${node_engine_name}">
-                    </div>
-				</div>
-            </div>
-        </div>
-
-
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title">Engine Strength:</h4>
-
-			<h7 class="card-title">Engine Mode:</h7>
-            <div class="form-group field-select-engine-mode">
-                <select class="form-control" name="select-engine-mode" id="select-engine-mode">
-                    <option value="option-depth" id="select-engine-mode-0">Depth</option>
-                    <option value="option-movetime" id="select-engine-mode-1">Move time</option>
-                </select>
-            </div>
-
-
-			
-            <h7 class="card-title">Engine Power:</h7>
-                <input type="range" class="form-range" min="${MIN_DEPTH}" max="${MAX_DEPTH}" step="1" value="${current_depth}" id="depth-range">
-                <input type="number" class="form-range" min="${MIN_DEPTH}" max="${MAX_DEPTH}" value="${current_depth}" id="depth-range-number">
-                <input type="range" class="form-range" min="${MIN_MOVETIME}" max="${MAX_MOVETIME}" step="50" value="${current_movetime}" id="movetime-range">
-                <input type="number" class="form-range" min="${MIN_MOVETIME}" max="${MAX_MOVETIME}" value="${current_movetime}" id="movetime-range-number">
-			</div>
-            
-            <div class="card-footer sideways-card" id="elo">
-                <ul style="margin:0px;">
-                    <li id="value">
-                        Elo: 
-                    </li>
-                    <li id="rank">
-                        Rank: 
-                    </li>
-                    <li id="power">
-                        Elo: 
-                    </li>
-                </ul>
-            </div>
-        </div>
-
-
-
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title">Visual:</h4>
-
-				<h6 class="alert">
-                    <span>&#9888;</span>Warning<span>&#9888;</span>: Displaying moves are detectable, use with caution !! 
-				</h6>
-				
-                <div id="max-moves-div" style="display:${node_engine_id == engineIndex ? 'none' : 'block'};">
-                    <div>
-                        <label for="reload-count">Max Best Moves</label>
-                        <input type="number" min="1" max="4" id="max-moves" value="${max_best_moves}">
-                    </div>
-                </div>
-
-                <label class="container">Display moves on chessboard
-                    <input type="checkbox" id="display-moves-on-site" ${displayMovesOnSite == true ? 'checked' : ''}>
-					<span class="checkmark"></span>
-                </label>
-
-                
-                <label class="container">Display Opponent best moves
-                    <input type="checkbox" id="show-opposite-moves" ${show_opposite_moves == true ? 'checked' : ''}>
-                    <span class="checkmark"></span>
-                </label>
-
-         
-
-
-
-
-       
-            </div>
-        </div>
-
-
-        <div class="card">
-        <div class="card-body">
-            <h4 class="card-title">Other:</h4>
-
-
-            <label class="container">Enable Userscript Log
-            <input type="checkbox" id="enable-user-log" ${enableUserLog == true ? 'checked' : ''}>
-            <span class="checkmark"></span>
-            </label>
-
-
-            <label class="container">Enable Engine Log
-            <input type="checkbox" id="enable-engine-log" ${enableEngineLog == true ? 'checked' : ''}>
-            <span class="checkmark"></span>
-            </label>
-
-
-
-
-    </div>
-    </div>
-    `);
-
-
-}
-
-function fixDepthMoveTimeInput(depthRangeElem, depthRangeNumberElem, moveTimeRangeElem, moveTimeRangeNumberElem, eloElem) {
-    if (engineMode == DEPTH_MODE) {
-        if (isNotCompatibleBrowser()) {
-            depthRangeElem.style.display = "none";
-            depthRangeNumberElem.style.display = "block";
-            moveTimeRangeElem.style.display = "none";
-            moveTimeRangeNumberElem.style.display = "none";
-        } else {
-            depthRangeElem.style.display = "block";
-            depthRangeNumberElem.style.display = "none";
-            moveTimeRangeElem.style.display = "none";
-            moveTimeRangeNumberElem.style.display = "none";
-        }
-    } else {
-        if (isNotCompatibleBrowser()) {
-            depthRangeElem.style.display = "none";
-            depthRangeNumberElem.style.display = "none";
-            moveTimeRangeElem.style.display = "none";
-            moveTimeRangeNumberElem.style.display = "block";
-        } else {
-            depthRangeElem.style.display = "none";
-            depthRangeNumberElem.style.display = "none";
-            moveTimeRangeElem.style.display = "block";
-            moveTimeRangeNumberElem.style.display = "none";
-        }
-    }
-
-
-
-    setEloDescription(eloElem);
-}
-
-
-async function resetSettings() {
-    await GM_setValue(dbValues.nightMode, undefined);
-
-
-    Gui.close();
-
-    initialize();
-}
-
-function openGUI() {
-
-
-
-    Gui.open(() => {
-        const bodyElem = Gui.document.querySelector("body");
-        const cardElem = Gui.document.querySelectorAll(".card");
-        const cardTitleElem = Gui.document.querySelectorAll(".card-title");
-        const FormControlElem = Gui.document.querySelectorAll(".form-control");
-        const labelElem = Gui.document.querySelectorAll("label");
-        const checkMarkElem = Gui.document.querySelectorAll(".checkmark");
-        const inputElem = Gui.document.querySelectorAll("input");
-        const listGroupElem = Gui.document.querySelectorAll(".list-group");
-        const cardFooterElem = Gui.document.querySelectorAll(".card-footer");
-        const textMutedElem = Gui.document.querySelectorAll("#fen");
-        const navLinkElem = Gui.document.querySelectorAll(".nav-tabs .nav-link");
-
-
-
-
-        const depthRangeElem = Gui.document.querySelector('#depth-range');
-        const depthRangeNumberElem = Gui.document.querySelector('#depth-range-number');
-        const maxMovesElem = Gui.document.querySelector('#max-moves');
-        const maxMovesDivElem = Gui.document.querySelector('#max-moves-div');
-        const moveTimeRangeElem = Gui.document.querySelector('#movetime-range');
-        const moveTimeRangeNumberElem = Gui.document.querySelector('#movetime-range-number');
-        const engineModeElem = Gui.document.querySelector('#select-engine-mode');
-        const engineElem = Gui.document.querySelector('#select-engine');
-        const engineNameDivElem = Gui.document.querySelector('#node-engine-div');
-        const reloadEngineDivElem = Gui.document.querySelector('#reload-engine-div');
-        const reloadEngineElem = Gui.document.querySelector('#reload-engine');
-        const reloadEveryDivElem = Gui.document.querySelector('#reload-count-div');
-        const reloadEveryElem = Gui.document.querySelector('#reload-count');
-        const nodeEngineNameElem = Gui.document.querySelector('#engine-name');
-        const nodeEngineUrlElem = Gui.document.querySelector('#engine-url');
-        const useLocalEngineElem = Gui.document.querySelector('#use-book-moves');
-        const showOppositeMovesElem = Gui.document.querySelector('#show-opposite-moves');
-        const displayMovesOnSiteElem = Gui.document.querySelector('#display-moves-on-site');
-        const enableUserLogElem = Gui.document.querySelector('#enable-user-log');
-        const enableEngineLogElem = Gui.document.querySelector('#enable-engine-log');
-        const eloElem = Gui.document.querySelector('#elo');
-        const getBestMoveElem = Gui.document.querySelector('#bestmove-btn');
-        const nightModeElem = Gui.document.querySelector('#night-mode');
-        const tutoElem = Gui.document.querySelector('#tuto');
-        const resetElem = Gui.document.querySelector('#reset-settings');
-
-
-        const setNightClassName = (elem) => {
-            const pos = elem.className.indexOf("night");
-            if (pos == -1) {
-                elem.className += " night";
-            }
-        }
-
-        const removeNightClassName = (elem) => {
-            const pos = elem.className.indexOf("night");
-            if (pos != -1) {
-                elem.className = elem.className.slice(0, pos - 1);
-            }
-        }
-
-        const setNightClassNames = (elems) => {
-            for (var a = 0; a < elems.length; a++) {
-                setNightClassName(elems[a]);
-            }
-        }
-        const removeNightClassNames = (elems) => {
-            for (var a = 0; a < elems.length; a++) {
-                removeNightClassName(elems[a]);
-            }
-        }
-
-
-        const checkNightMode = () => {
-            if (nightMode) {
-                setNightClassName(bodyElem);
-                setNightClassNames(cardElem);
-                setNightClassNames(cardTitleElem);
-                setNightClassNames(FormControlElem);
-                setNightClassNames(inputElem);
-                setNightClassNames(labelElem);
-                setNightClassNames(checkMarkElem);
-                setNightClassNames(listGroupElem);
-                setNightClassNames(cardFooterElem);
-                setNightClassNames(textMutedElem);
-                setNightClassNames(navLinkElem);
-            } else {
-                removeNightClassName(bodyElem);
-                removeNightClassNames(cardElem);
-                removeNightClassNames(cardTitleElem);
-                removeNightClassNames(FormControlElem);
-                removeNightClassNames(inputElem);
-                removeNightClassNames(labelElem);
-                removeNightClassNames(checkMarkElem);
-                removeNightClassNames(listGroupElem);
-                removeNightClassNames(cardFooterElem);
-                removeNightClassNames(textMutedElem);
-                removeNightClassNames(navLinkElem);
-            }
-        }
-
-
-
-
-        fixDepthMoveTimeInput(depthRangeElem, depthRangeNumberElem, moveTimeRangeElem, moveTimeRangeNumberElem, eloElem);
-        engineElem.selectedIndex = engineIndex;
-        engineModeElem.selectedIndex = engineMode;
-        checkNightMode();
-
-
-        // compatibility fix
-        if (isNotCompatibleBrowser()) {
-            var forms = Gui.document.querySelectorAll('.rendered-form');
-            for (var a = 0; a < forms.length; a++) {
-                forms[a].style.width = "auto";
-            }
-            Gui.document.querySelector('#gui').style.minWidth = "350px";
-            Gui.document.querySelector('#content').style.maxHeight = "500px";
-            Gui.document.querySelector('#content').style.overflow = "scroll";
-            Gui.document.querySelector('#chessboard').remove();
-            Gui.document.querySelector('#orientation').remove();
-            Gui.document.querySelector('#engine-log-container').style.maxHeight = "100px";
-            Gui.document.querySelector('#engine-log-container').style.overflow = "scroll";
-            Gui.document.querySelector('#userscript-log-container').style.maxHeight = "100px";
-            Gui.document.querySelector('#userscript-log-container').style.overflow = "scroll";
-
-            Gui.document.querySelector('#button-close-gui').addEventListener('click', e => {
-                e.preventDefault();
-                if (closedGui == true) {
-                    closedGui = false;
-                    Gui.document.querySelector("#content").style.display = "block";
-                }
-                else {
-                    closedGui = true;
-                    Gui.document.querySelector("#content").style.display = "none";
-
-                }
-            });
-        }
-
-
-        if (CURRENT_SITE == LICHESS_ORG) {
-            // disabled web engine selection due to cors issues
-            engineElem.childNodes.forEach(elem => {
-                if (elem.id == "web-engine") {
-                    elem.disabled = true;
-                }
-            })
-
-            if(!isNotCompatibleBrowser()){
-                Gui.document.querySelector('#chessboard').remove();
-                Gui.document.querySelector('#orientation').remove();
-            }
-
-            engineElem.selectedIndex = node_engine_id;
-            maxMovesDivElem.style.display = "none";
-            engineNameDivElem.style.display = "block";
-            reloadEngineDivElem.style.display = "none";
-        }
-
-
-        resetElem.onclick = () => {
-            resetSettings()
-        }
-
-		tutoElem.onclick = () => {
-			window.open("https://www.youtube.com/watch?v=WaqI4l_hmIE&t=16s","_blank");
-		}
-
-        nightModeElem.onclick = () => {
-            if (nightMode) {
-                nightMode = false;
-                nightModeElem.value = "Enable Night Mode";
-            } else {
-                nightMode = true;
-                nightModeElem.value = "Disable Night Mode";
-            }
-
-
-
-            checkNightMode();
-
-            GM_setValue(dbValues.nightMode, nightMode);
-
-
-        }
-
-        getBestMoveElem.onclick = () => {
-            if (forcedBestMove)
-                return;
-
-            getBestMoveElem.disabled = true;
-            forcedBestMove = true;
-
-
-
-            updateBoard();
-            sendBestMove();
-        }
-
-        engineModeElem.onchange = () => {
-            engineMode = engineModeElem.selectedIndex;
-            GM_setValue(dbValues.engineMode, engineMode);
-
-            fixDepthMoveTimeInput(depthRangeElem, depthRangeNumberElem, moveTimeRangeElem, moveTimeRangeNumberElem, eloElem);
-        }
-        nodeEngineNameElem.onchange = () => {
-            node_engine_name = nodeEngineNameElem.value;
-            GM_setValue(dbValues.node_engine_name, node_engine_name);
-        }
-        nodeEngineUrlElem.onchange = () => {
-            node_engine_url = nodeEngineUrlElem.value;
-            GM_setValue(dbValues.node_engine_url, node_engine_url);
-        }
-
-        enableUserLogElem.onchange = () => {
-            enableUserLog = enableUserLogElem.checked;
-
-
-            GM_setValue(dbValues.enableUserLog, enableUserLog);
-        }
-        enableEngineLogElem.onchange = () => {
-            enableEngineLog = enableEngineLogElem.checked;
-
-
-            GM_setValue(dbValues.enableEngineLog, enableEngineLog);
-        }
-
-        reloadEngineElem.onchange = () => {
-            reload_engine = reloadEngineElem.checked;
-
-            if (reload_engine) {
-                reloadEveryDivElem.style.display = "block";
-            } else {
-                reloadEveryDivElem.style.display = "none";
-            }
-
-            GM_setValue(dbValues.reload_engine, reload_engine);
-        }
-
-        reloadEveryElem.onchange = () => {
-            reload_every = reloadEveryElem.value;
-            GM_setValue(dbValues.reload_every, reload_every);
-        }
-
-        engineElem.onchange = () => {
-            lastEngine = engineIndex;
-            engineIndex = engineElem.selectedIndex;
-            GM_setValue(dbValues.engineIndex, engineIndex);
-
-
-            if (node_engine_id == engineIndex) {
-                reloadEngineDivElem.style.display = "none";
-                engineNameDivElem.style.display = "block";
-                maxMovesDivElem.style.display = "none";
-            }
-            else {
-                reloadEngineDivElem.style.display = "block";
-                engineNameDivElem.style.display = "none";
-                maxMovesDivElem.style.display = "block";
-            }
-
-
-
-
-
-            if (engineObjectURL) {
-                URL.revokeObjectURL(engineObjectURL);
-                engineObjectURL = null;
-            }
-
-
-
-
-            reloadChessEngine(true, () => {
-                Interface.boardUtils.removeBestMarkings();
-
-                removeSiteMoveMarkings();
-
-                Interface.boardUtils.updateBoardPower(0, 0);
-            });
-
-        }
-
-
-
-        depthRangeElem.onchange = () => {
-            changeEnginePower(depthRangeElem.value, eloElem);
-        };
-
-        depthRangeNumberElem.onchange = () => {
-            changeEnginePower(depthRangeNumberElem.value, eloElem);
-        };
-
-
-        maxMovesElem.onchange = () => {
-            max_best_moves = maxMovesElem.value;
-            GM_setValue(dbValues.max_best_moves, max_best_moves);
-        };
-
-
-
-        moveTimeRangeElem.onchange = () => {
-            changeEnginePower(moveTimeRangeElem.value, eloElem);
-        };
-
-        moveTimeRangeNumberElem.onchange = () => {
-            changeEnginePower(moveTimeRangeNumberElem.value, eloElem);
-        };
-
-        showOppositeMovesElem.onchange = () => {
-            show_opposite_moves = showOppositeMovesElem.checked;
-
-
-            GM_setValue(dbValues.show_opposite_moves, show_opposite_moves);
-        }
-
-        useLocalEngineElem.onchange = () => {
-            use_book_moves = useLocalEngineElem.checked;
-
-
-
-            GM_setValue(dbValues.use_book_moves, use_book_moves);
-        }
-
-        displayMovesOnSiteElem.onchange = () => {
-            displayMovesOnSite = displayMovesOnSiteElem.checked;
-
-
-            GM_setValue(dbValues.displayMovesOnSite, displayMovesOnSite);
-        };
-
-
-
-
-
-
-        window.onunload = () => {
-            if (Gui.window && !Gui.window.closed) {
-                Gui.window.close();
-            }
-        };
-
-        const isWindowClosed = setInterval(() => {
-            if (Gui.window.closed) {
-                clearInterval(isWindowClosed);
-                if (engine != null)
-                    engine.terminate();
-            }
-        }, 1000);
-
-
-
-        Interface.log('Initialized GUI!');
-
-        observeNewMoves();
-    });
-}
-
-function changeEnginePower(val, eloElem) {
-    if (engineMode == DEPTH_MODE) {
-        current_depth = val
-        GM_setValue(dbValues.current_depth, current_depth);
-    } else {
-        current_movetime = val
-        GM_setValue(dbValues.current_movetime, current_movetime);
-    }
-
-
-    setEloDescription(eloElem);
-}
-
-function reloadChessEngine(forced, callback) {
-    // reload only if using local engines
-    if (node_engine_id == engineIndex && forced == false) {
-        callback();
-    }
-    else if (reload_engine == true && reload_count >= reload_every || forced == true) {
-        reload_count = 1;
-        Interface.log(`Reloading the chess engine!`);
-
-        if (engine)
-            engine.terminate();
-
-        loadChessEngine(callback);
-    }
-    else {
-        reload_count = reload_count + 1;
-        callback();
-    }
-}
-
-
-
+// ─── Engine lifecycle ─────────────────────────────────────────────────────────
 function loadChessEngine(callback) {
-    // exclude lichess.org
-    if (CURRENT_SITE == LICHESS_ORG) {
-        return callback();
-    }
+    if (CURRENT_SITE === LICHESS_ORG) return callback();
 
-    if (!engineObjectURL) {
-        if (engineIndex == 0)
-            engineObjectURL = URL.createObjectURL(new Blob([GM_getResourceText('lozza.js')], { type: 'application/javascript' }));
-        else if (engineIndex == 1)
-            engineObjectURL = URL.createObjectURL(new Blob([GM_getResourceText('stockfish-5.js')], { type: 'application/javascript' }));
-        else if (engineIndex == 2)
-            engineObjectURL = URL.createObjectURL(new Blob([GM_getResourceText('stockfish-2018.js')], { type: 'application/javascript' }));
+    if (!engineObjectURL && ENGINE_RESOURCES[engineIndex]) {
+        const src = GM_getResourceText(ENGINE_RESOURCES[engineIndex]);
+        if (src) engineObjectURL = URL.createObjectURL(
+            new Blob([src], { type: 'application/javascript' }));
     }
 
     if (engineObjectURL) {
         engine = new Worker(engineObjectURL);
-
         engine.postMessage('ucinewgame');
+        Interface.log(`Loaded engine: ${ENGINE_NAMES[engineIndex] || 'unknown'}`);
+    }
+    callback();
+}
 
-        Interface.log(`Loaded the chess engine!`);
+function reloadChessEngine(forced, callback) {
+    if (engineIndex === node_engine_id && !forced) return callback();
+
+    if (forced || (reload_engine && reload_count >= reload_every)) {
+        reload_count = 1;
+        Interface.log('Reloading chess engine...');
+        engine?.terminate();
+        loadChessEngine(callback);
+    } else {
+        reload_count++;
+        callback();
+    }
+}
+
+// ─── Player / board observation ───────────────────────────────────────────────
+function updatePlayerColor(callback) {
+    playerColor = Interface.getBoardOrientation();
+    turn = playerColor;
+    Interface.boardUtils.updateBoardOrientation(playerColor);
+    callback();
+}
+
+function observeNewMoves() {
+    updateBestMove();
+    new MutationObserver(muts => {
+        lastPlayerColor = playerColor;
+        updatePlayerColor(() => {
+            if (playerColor !== lastPlayerColor) {
+                Interface.log(`Color changed: ${lastPlayerColor} → ${playerColor}`);
+                updateBestMove();
+            } else {
+                updateBestMove(muts);
+            }
+        });
+    }).observe(chessBoardElem, { childList: true, subtree: true, attributes: true });
+}
+
+// ─── Night mode ───────────────────────────────────────────────────────────────
+function applyNightMode() {
+    if (!Gui.document) return;
+    const toggleSel = (sel, multi) => {
+        const els = multi
+            ? [...Gui.document.querySelectorAll(sel)]
+            : [Gui.document.querySelector(sel)].filter(Boolean);
+        els.forEach(el => el.classList.toggle('night', nightMode));
+    };
+    toggleSel('body',                        false);
+    toggleSel('.card',                       true);
+    toggleSel('.card-title',                 true);
+    toggleSel('.form-control',               true);
+    toggleSel('label',                       true);
+    toggleSel('.checkmark',                  true);
+    toggleSel('input',                       true);
+    toggleSel('.list-group',                 true);
+    toggleSel('.card-footer',                true);
+    toggleSel('#fen',                        false);
+    toggleSel('.nav-tabs .nav-link',         true);
+}
+
+// ─── GUI pages ────────────────────────────────────────────────────────────────
+const SETTINGS_CSS = `
+<style>
+body{display:grid;justify-items:center;background:#fff;transition:.2s}
+body.night{background:#312e2b}
+.rendered-form{width:500px}
+.card{border:3px solid rgba(0,0,0,.2)!important;background:#fff;transition:.2s}
+.card.night{background:#545454}
+.card-title{color:#000;transition:.2s}
+.card-title.night{color:#fff}
+.form-control{color:#000;background:#fff;transition:.2s}
+.form-control.night{color:#fff;background:#525252}
+label,input{color:#000;background:#fff;transition:.2s}
+label.night,input.night{color:#fff;background:#525252}
+.list-group div{background:#fff;transition:.2s}
+.list-group.night div{background:#bbb}
+.card-footer{color:#000;font-weight:bold;transition:.2s}
+.card-footer.night{color:#fff}
+#fen{color:#000;font-size:15px;word-break:break-word;transition:.2s}
+#fen.night{color:#fff}
+.nav-tabs .nav-link:hover{border-color:#454646 #454646 #454646;isolation:isolate}
+.nav-tabs .nav-link.night:hover{border-color:#e9ecef #e9ecef #dee2e6}
+.nav-tabs .nav-link.active{background:#bbb}
+.nav-tabs .nav-link.active.night{background:#fff}
+.btn{border-color:#bbb;border-width:3px;width:100%;transition:.2s}
+.btn:hover{background:#0d6efd}
+.btn:active{background:#0c5acd}
+.space{height:10px}
+.form-control,.list-group{border:2px solid #0000004f!important}
+#reload-count{width:15%}
+.nav-link{font-weight:bold}
+.alert{padding:20px;background:#f44336;color:#fff}
+.container{display:block;position:relative;padding-left:35px;margin-bottom:12px;cursor:pointer;font-size:15px;user-select:none}
+.container input{position:absolute;opacity:0;cursor:pointer;height:0;width:0}
+.checkmark{display:flex;justify-content:center;align-items:center;position:absolute;top:0;left:0;height:25px;width:25px;background:#eee;outline:3px solid #bbb}
+.checkmark.night{outline:none}
+.container:hover input~.checkmark{background:#ccc}
+.container input:checked~.checkmark{background:#2196F3}
+.checkmark:after{content:"";position:absolute;display:none}
+.container input:checked~.checkmark:after{display:block}
+.container .checkmark:after{width:40%;height:70%;margin-left:1px;border:solid white;border-width:0 3px 3px 0;transform:rotate(45deg)}
+</style>`;
+
+// Build engine option list from ENGINE_NAMES + node server
+const engineOptionsHtml = ENGINE_NAMES.map(n => `<option>${n}</option>`).join('')
+    + `<option>Node / Go Server</option>`;
+
+function addGuiPages() {
+    if (guiPagesAdded) return;
+    guiPagesAdded = true;
+
+    // ── Main ──────────────────────────────────────────────────────────────────
+    Gui.addPage('Main', `
+    <div class="rendered-form" id="main-tab">
+      <div class="card">
+        <div class="card-body" id="chessboard-card">
+          <div class="main-title-bar">
+            <h4 class="card-title">Live Chessboard</h4>
+            <p class="card-title" id="best-move-progress"></p>
+          </div>
+          <div id="board" style="width:447px"></div>
+        </div>
+        <div id="orientation" class="hidden"></div>
+        <div class="card-footer sideways-card">
+          <input class="btn" type="button" value="Get Best Move" id="bestmove-btn">
+        </div>
+        <div class="card-footer sideways-card">FEN: <div id="fen"></div></div>
+        <div class="card-footer sideways-card">ENEMY SCORE: <div id="enemy-score">0</div></div>
+        <div class="card-footer sideways-card">MY SCORE: <div id="my-score">0</div></div>
+      </div>
+    </div>`);
+
+    // ── Log ───────────────────────────────────────────────────────────────────
+    Gui.addPage('Log', `
+    <div class="rendered-form" id="log-tab">
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Userscript Log</h4>
+          <ul class="list-group" id="userscript-log-container"></ul>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Engine Log</h4>
+          <ul class="list-group" id="engine-log-container"></ul>
+        </div>
+      </div>
+    </div>`);
+
+    // ── Settings ──────────────────────────────────────────────────────────────
+    Gui.addPage('Settings', `
+    ${SETTINGS_CSS}
+    <div class="rendered-form" id="settings-tab">
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Main Settings</h4>
+          <input class="btn" type="button" value="Reset Settings" id="reset-settings">
+          <div class="space"></div>
+          <input class="btn" type="button" value="${nightMode ? 'Disable Night Mode' : 'Enable Night Mode'}" id="night-mode-btn">
+          <div class="space"></div>
+          <input class="btn" type="button" value="Tutorials / Support" id="tuto-btn">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Engine</h4>
+          <select class="form-control" id="select-engine">${engineOptionsHtml}</select>
+          <div class="space"></div>
+          <label class="container">Use book moves (Lichess API)
+            <input type="checkbox" id="use-book-moves" ${use_book_moves ? 'checked' : ''}>
+            <span class="checkmark"></span>
+          </label>
+          <div id="reload-engine-div" style="display:${engineIndex === node_engine_id ? 'none' : 'block'}">
+            <label class="container">Enable Engine Reload
+              <input type="checkbox" id="reload-engine" ${reload_engine ? 'checked' : ''}>
+              <span class="checkmark"></span>
+            </label>
+            <div id="reload-count-div" style="display:${reload_engine ? 'block' : 'none'}">
+              <label>Reload every
+                <input type="number" id="reload-count" value="${reload_every}" style="width:15%">
+                moves
+              </label>
+            </div>
+          </div>
+          <div id="node-engine-div" style="display:${engineIndex === node_engine_id ? 'block' : 'none'}">
+            <label>Server URL:<br><input type="text" id="engine-url" value="${node_engine_url}" style="width:100%"></label>
+            <div class="space"></div>
+            <label>Engine Name:<br><input type="text" id="engine-name" value="${node_engine_name}" style="width:100%"></label>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Engine Strength</h4>
+          <label>Engine Mode:</label>
+          <select class="form-control" id="select-engine-mode">
+            <option>Depth</option>
+            <option>Move time</option>
+          </select>
+          <div class="space"></div>
+          <label>Engine Power:</label>
+          <input type="range"  class="form-range" min="${MIN_DEPTH}"    max="${MAX_DEPTH}"    step="1"   value="${current_depth}"    id="depth-range">
+          <input type="number" class="form-range" min="${MIN_DEPTH}"    max="${MAX_DEPTH}"               value="${current_depth}"    id="depth-range-number" style="display:none">
+          <input type="range"  class="form-range" min="${MIN_MOVETIME}" max="${MAX_MOVETIME}" step="50"  value="${current_movetime}" id="movetime-range"        style="display:none">
+          <input type="number" class="form-range" min="${MIN_MOVETIME}" max="${MAX_MOVETIME}"             value="${current_movetime}" id="movetime-range-number" style="display:none">
+        </div>
+        <div class="card-footer sideways-card" id="elo">
+          <ul style="margin:0">
+            <li id="value">Elo: ${getElo()}</li>
+            <li id="rank">Rank: ${getRank()}</li>
+            <li id="power">Depth: ${current_depth}</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Visual</h4>
+          <h6 class="alert">⚠ Warning ⚠: Displaying moves on-site is detectable — use with caution!</h6>
+          <div id="max-moves-div" style="display:${engineIndex === node_engine_id ? 'none' : 'block'}">
+            <label>Max Best Moves:
+              <input type="number" min="1" max="4" id="max-moves" value="${max_best_moves}">
+            </label>
+          </div>
+          <label class="container">Display moves on chessboard
+            <input type="checkbox" id="display-moves-on-site" ${displayMovesOnSite ? 'checked' : ''}>
+            <span class="checkmark"></span>
+          </label>
+          <label class="container">Display opponent best moves
+            <input type="checkbox" id="show-opposite-moves" ${show_opposite_moves ? 'checked' : ''}>
+            <span class="checkmark"></span>
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h4 class="card-title">Logging</h4>
+          <label class="container">Enable Userscript Log
+            <input type="checkbox" id="enable-user-log" ${enableUserLog ? 'checked' : ''}>
+            <span class="checkmark"></span>
+          </label>
+          <label class="container">Enable Engine Log
+            <input type="checkbox" id="enable-engine-log" ${enableEngineLog ? 'checked' : ''}>
+            <span class="checkmark"></span>
+          </label>
+        </div>
+      </div>
+    </div>`);
+}
+
+// ─── Open GUI ─────────────────────────────────────────────────────────────────
+function openGUI() {
+    Gui.open(() => {
+        /**
+         * The popup window needs jQuery loaded before chessboard.js.
+         * We inject them as <script> tags and wait for both to be ready
+         * before wiring up the board observers.
+         */
+        const popDoc  = Gui.document;
+        const popHead = popDoc.head;
+
+        const injectScript = (text) => {
+            const s = popDoc.createElement('script');
+            s.textContent = text;
+            popHead.appendChild(s);
+        };
+
+        // Inject jQuery first (synchronously from @resource cache), then chessboard.js
+        injectScript(GM_getResourceText('jquery.js'));
+        injectScript(GM_getResourceText('chessboard.js'));
+
+        // Now jQuery + ChessBoard are available in the popup synchronously
+        const popWin = Gui.window;
+        const q = id => popDoc.querySelector(id);
+
+        // ── Init the visual chessboard in the popup ──
+        const fenEl         = q('#fen');
+        const orientationEl = q('#orientation');
+
+        if (fenEl && !isFirefox() && CURRENT_SITE !== LICHESS_ORG) {
+            // jQuery must be accessed from the popup window context
+            const $ = popWin.jQuery;
+            if ($ && popWin.ChessBoard) {
+                let uiBoard = popWin.ChessBoard('board', {
+                    pieceTheme: `${repositoryRawURL}/content/chesspieces/{piece}.svg`,
+                    position:   'start',
+                    orientation: playerColor === 'b' ? 'black' : 'white'
+                });
+
+                // Watch orientation element for flips
+                new MutationObserver(() => {
+                    uiBoard = popWin.ChessBoard('board', {
+                        pieceTheme: `${repositoryRawURL}/content/chesspieces/{piece}.svg`,
+                        position:   fenEl.textContent || 'start',
+                        orientation: orientationEl.textContent === 'b' ? 'black' : 'white'
+                    });
+                }).observe(orientationEl, { childList: true, characterData: true, subtree: true });
+
+                // Watch FEN element for position updates
+                new MutationObserver(() => {
+                    try { uiBoard.position(fenEl.textContent); } catch(_) {}
+                }).observe(fenEl, { childList: true, characterData: true, subtree: true });
+            } else {
+                // jQuery or ChessBoard not available — remove board card to avoid blank space
+                q('#chessboard-card')?.remove();
+                q('#orientation')?.remove();
+            }
+        } else {
+            // Firefox / Lichess: remove chessboard UI
+            q('#chessboard-card')?.remove();
+            q('#orientation')?.remove();
+        }
+
+        // ── Cache all settings elements ──
+        const depthRangeEl       = q('#depth-range');
+        const depthRangeNumEl    = q('#depth-range-number');
+        const moveTimeRangeEl    = q('#movetime-range');
+        const moveTimeRangeNumEl = q('#movetime-range-number');
+        const maxMovesEl         = q('#max-moves');
+        const maxMovesDivEl      = q('#max-moves-div');
+        const engineModeEl       = q('#select-engine-mode');
+        const engineEl           = q('#select-engine');
+        const engineNameDivEl    = q('#node-engine-div');
+        const reloadEngineDivEl  = q('#reload-engine-div');
+        const reloadEngineEl     = q('#reload-engine');
+        const reloadEveryDivEl   = q('#reload-count-div');
+        const reloadEveryEl      = q('#reload-count');
+        const nodeNameEl         = q('#engine-name');
+        const nodeUrlEl          = q('#engine-url');
+        const useBookEl          = q('#use-book-moves');
+        const showOppEl          = q('#show-opposite-moves');
+        const displayOnSiteEl    = q('#display-moves-on-site');
+        const enableUserLogEl    = q('#enable-user-log');
+        const enableEngineLogEl  = q('#enable-engine-log');
+        const eloEl              = q('#elo');
+        const bestMoveBtnEl      = q('#bestmove-btn');
+        const nightModeEl        = q('#night-mode-btn');
+        const tutoEl             = q('#tuto-btn');
+        const resetEl            = q('#reset-settings');
+
+        // ── Apply initial state ──
+        fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
+        if (engineEl)     engineEl.selectedIndex     = engineIndex;
+        if (engineModeEl) engineModeEl.selectedIndex = engineMode;
+        applyNightMode();
+
+        // Firefox compat
+        if (isFirefox()) {
+            popDoc.querySelectorAll('.rendered-form').forEach(el => el.style.width = 'auto');
+            const gui     = q('#gui');
+            const content = q('#content');
+            if (gui)     gui.style.minWidth = '350px';
+            if (content) { content.style.maxHeight = '500px'; content.style.overflow = 'scroll'; }
+            [q('#engine-log-container'), q('#userscript-log-container')].forEach(el => {
+                if (el) { el.style.maxHeight = '100px'; el.style.overflow = 'scroll'; }
+            });
+            q('#button-close-gui')?.addEventListener('click', e => {
+                e.preventDefault();
+                closedGui = !closedGui;
+                if (content) content.style.display = closedGui ? 'none' : 'block';
+            });
+        }
+
+        // Lichess overrides
+        if (CURRENT_SITE === LICHESS_ORG) {
+            engineEl?.querySelectorAll('option').forEach((opt, i) => {
+                if (i < node_engine_id) opt.disabled = true;
+            });
+            if (engineEl) engineEl.selectedIndex = node_engine_id;
+            if (maxMovesDivEl)    maxMovesDivEl.style.display    = 'none';
+            if (engineNameDivEl)  engineNameDivEl.style.display  = 'block';
+            if (reloadEngineDivEl) reloadEngineDivEl.style.display = 'none';
+        }
+
+        // ── Event listeners ──
+        if (resetEl) resetEl.onclick = async () => {
+            await GM_setValue(DB.nightMode, undefined);
+            Gui.close();
+            guiPagesAdded = false;
+            initialize();
+        };
+
+        if (tutoEl) tutoEl.onclick = () =>
+            window.open('https://www.youtube.com/watch?v=WaqI4l_hmIE&t=16s', '_blank');
+
+        if (nightModeEl) nightModeEl.onclick = () => {
+            nightMode = !nightMode;
+            nightModeEl.value = nightMode ? 'Disable Night Mode' : 'Enable Night Mode';
+            applyNightMode();
+            GM_setValue(DB.nightMode, nightMode);
+        };
+
+        if (bestMoveBtnEl) bestMoveBtnEl.onclick = () => {
+            if (forcedBestMove) return;
+            bestMoveBtnEl.disabled = true;
+            forcedBestMove = true;
+            updateBoard();
+            sendBestMove();
+        };
+
+        if (engineModeEl) engineModeEl.onchange = () => {
+            engineMode = engineModeEl.selectedIndex;
+            GM_setValue(DB.engineMode, engineMode);
+            fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
+        };
+
+        if (engineEl) engineEl.onchange = () => {
+            engineIndex = engineEl.selectedIndex;
+            GM_setValue(DB.engineIndex, engineIndex);
+            const isNode = engineIndex === node_engine_id;
+            if (reloadEngineDivEl)  reloadEngineDivEl.style.display  = isNode ? 'none' : 'block';
+            if (engineNameDivEl)    engineNameDivEl.style.display    = isNode ? 'block' : 'none';
+            if (maxMovesDivEl)      maxMovesDivEl.style.display      = isNode ? 'none' : 'block';
+            if (engineObjectURL) { URL.revokeObjectURL(engineObjectURL); engineObjectURL = null; }
+            reloadChessEngine(true, () => {
+                Interface.boardUtils.removeBestMarkings();
+                removeSiteMoveMarkings();
+                Interface.boardUtils.updateBoardPower(0, 0);
+            });
+        };
+
+        const changePower = val => {
+            if (engineMode === DEPTH_MODE) { current_depth    = Number(val); GM_setValue(DB.current_depth,    current_depth);    }
+            else                           { current_movetime = Number(val); GM_setValue(DB.current_movetime, current_movetime); }
+            setEloDescription(eloEl);
+        };
+
+        if (depthRangeEl)       depthRangeEl.onchange       = () => changePower(depthRangeEl.value);
+        if (depthRangeNumEl)    depthRangeNumEl.onchange    = () => changePower(depthRangeNumEl.value);
+        if (moveTimeRangeEl)    moveTimeRangeEl.onchange    = () => changePower(moveTimeRangeEl.value);
+        if (moveTimeRangeNumEl) moveTimeRangeNumEl.onchange = () => changePower(moveTimeRangeNumEl.value);
+        if (maxMovesEl)         maxMovesEl.onchange         = () => { max_best_moves = Number(maxMovesEl.value); GM_setValue(DB.max_best_moves, max_best_moves); };
+
+        if (nodeNameEl)       nodeNameEl.onchange       = () => { node_engine_name = nodeNameEl.value;   GM_setValue(DB.node_engine_name,    node_engine_name);    };
+        if (nodeUrlEl)        nodeUrlEl.onchange        = () => { node_engine_url  = nodeUrlEl.value;    GM_setValue(DB.node_engine_url,     node_engine_url);     };
+        if (useBookEl)        useBookEl.onchange        = () => { use_book_moves   = useBookEl.checked;  GM_setValue(DB.use_book_moves,      use_book_moves);      };
+        if (showOppEl)        showOppEl.onchange        = () => { show_opposite_moves = showOppEl.checked;   GM_setValue(DB.show_opposite_moves, show_opposite_moves); };
+        if (displayOnSiteEl)  displayOnSiteEl.onchange  = () => { displayMovesOnSite  = displayOnSiteEl.checked; GM_setValue(DB.displayMovesOnSite,  displayMovesOnSite);  };
+        if (enableUserLogEl)  enableUserLogEl.onchange  = () => { enableUserLog   = enableUserLogEl.checked;   GM_setValue(DB.enableUserLog,   enableUserLog);   };
+        if (enableEngineLogEl) enableEngineLogEl.onchange = () => { enableEngineLog = enableEngineLogEl.checked; GM_setValue(DB.enableEngineLog, enableEngineLog); };
+
+        if (reloadEngineEl) reloadEngineEl.onchange = () => {
+            reload_engine = reloadEngineEl.checked;
+            if (reloadEveryDivEl) reloadEveryDivEl.style.display = reload_engine ? 'block' : 'none';
+            GM_setValue(DB.reload_engine, reload_engine);
+        };
+        if (reloadEveryEl) reloadEveryEl.onchange = () => {
+            reload_every = Number(reloadEveryEl.value);
+            GM_setValue(DB.reload_every, reload_every);
+        };
+
+        window.onunload = () => { if (Gui.window && !Gui.window.closed) Gui.window.close(); };
+
+        const closedCheck = setInterval(() => {
+            if (Gui.window.closed) { clearInterval(closedCheck); engine?.terminate(); }
+        }, 1000);
+
+        Interface.log('GUI initialized!');
+        observeNewMoves();
+    });
+}
+
+function fixDepthMoveTimeInput(depthR, depthN, mtR, mtN, eloElem) {
+    if (!depthR) return;
+    const ff = isFirefox();
+    const dm = engineMode === DEPTH_MODE;
+    depthR.style.display = (!ff && dm)  ? 'block' : 'none';
+    depthN.style.display = (ff  && dm)  ? 'block' : 'none';
+    mtR.style.display    = (!ff && !dm) ? 'block' : 'none';
+    mtN.style.display    = (ff  && !dm) ? 'block' : 'none';
+    setEloDescription(eloElem);
+}
+
+// ─── Database init ────────────────────────────────────────────────────────────
+async function initializeDatabase(callback) {
+    const defaults = {
+        nightMode: false, engineMode: 0, engineIndex: 0,
+        reload_engine: false, reload_every: 10,
+        enableUserLog: true, enableEngineLog: true,
+        displayMovesOnSite: false, show_opposite_moves: false, use_book_moves: false,
+        node_engine_url: 'http://localhost:5000', node_engine_name: 'stockfish-15.exe',
+        current_depth: Math.round(MAX_DEPTH / 2), current_movetime: Math.round(MAX_MOVETIME / 3),
+        max_best_moves: 1
+    };
+
+    const stored = await GM_getValue(DB.nightMode);
+
+    // Write defaults on first run
+    if (stored === undefined) {
+        for (const [k, v] of Object.entries(defaults)) await GM_setValue(DB[k], v);
     }
 
+    // Always read back from storage (handles both first-run and subsequent)
+    nightMode          = await GM_getValue(DB.nightMode);
+    engineMode         = await GM_getValue(DB.engineMode);
+    engineIndex        = await GM_getValue(DB.engineIndex);
+    reload_engine      = await GM_getValue(DB.reload_engine);
+    reload_every       = await GM_getValue(DB.reload_every);
+    enableUserLog      = await GM_getValue(DB.enableUserLog);
+    enableEngineLog    = await GM_getValue(DB.enableEngineLog);
+    displayMovesOnSite = await GM_getValue(DB.displayMovesOnSite);
+    show_opposite_moves= await GM_getValue(DB.show_opposite_moves);
+    use_book_moves     = await GM_getValue(DB.use_book_moves);
+    node_engine_url    = await GM_getValue(DB.node_engine_url);
+    node_engine_name   = await GM_getValue(DB.node_engine_name);
+    current_depth      = await GM_getValue(DB.current_depth);
+    current_movetime   = await GM_getValue(DB.current_movetime);
+    max_best_moves     = await GM_getValue(DB.max_best_moves);
+
     callback();
 }
 
-
-
-function updatePlayerColor(callback) {
-    const boardOrientation = Interface.getBoardOrientation();
-
-    playerColor = boardOrientation;
-    turn = boardOrientation;
-
-
-    Interface.boardUtils.updateBoardOrientation(playerColor);
-
-    callback();
-}
-
+// ─── Entry point ──────────────────────────────────────────────────────────────
 function initialize() {
-    Interface = new InterfaceUtils();
-    LozzaUtils = new LozzaUtility();
+    Interface  = new InterfaceUtils();
+    const LozzaUtils = new LozzaUtility();
+    // expose LozzaUtils globally so getBestMoves can use it
+    window._LozzaUtils = LozzaUtils;
+    turn = Interface.getBoardOrientation();
 
-    const boardOrientation = Interface.getBoardOrientation();
-    turn = boardOrientation;
-
-    initializeDatabase(() => {
-        loadChessEngine(() => {
+    initializeDatabase(() =>
+        loadChessEngine(() =>
             updatePlayerColor(() => {
                 addGuiPages();
                 openGUI();
-            });
-        });
-    });
-
-
-
+            })
+        )
+    );
 }
 
-if (typeof GM_registerMenuCommand == 'function') {
-    GM_registerMenuCommand("Open Smart Chess Bot", e => {
-        if (chessBoardElem) {
-            initialize();
-        }
+// Patch LozzaUtils reference to use the instance created in initialize()
+// (avoids a separate global declaration)
+Object.defineProperty(window, 'LozzaUtils', {
+    get: () => window._LozzaUtils,
+    configurable: true
+});
+
+if (typeof GM_registerMenuCommand === 'function') {
+    GM_registerMenuCommand('Open Smart Chess Bot', () => {
+        if (chessBoardElem) initialize();
     }, 's');
 }
 
-
 const waitForChessBoard = setInterval(() => {
-    if (CURRENT_SITE) {
-        return;
+    if (CURRENT_SITE === null || CURRENT_SITE === undefined) {
+        if      (window.location.href.includes('lichess.org')) CURRENT_SITE = LICHESS_ORG;
+        else if (window.location.href.includes('chess.com'))   CURRENT_SITE = CHESS_COM;
     }
 
-
-
-    if (window.location.href.includes("lichess.org")) {
-        CURRENT_SITE = LICHESS_ORG;
-        boardElem = document.querySelector('.main-board');
-        firstPieceElem = document.querySelector('piece');
-    }
-    else if (window.location.href.includes("chess.com")) {
-        CURRENT_SITE = CHESS_COM;
-        boardElem = document.querySelector('.board');
+    if (CURRENT_SITE === LICHESS_ORG) {
+        boardElem      = document.querySelector('.cg-wrap');
+        firstPieceElem = boardElem?.querySelector('piece') ?? null;
+    } else if (CURRENT_SITE === CHESS_COM) {
+        boardElem      = document.querySelector('.board');
         firstPieceElem = document.querySelector('.piece');
     }
 
-
-    if (boardElem && firstPieceElem && chessBoardElem != boardElem) {
+    if (boardElem && firstPieceElem && chessBoardElem !== boardElem) {
         chessBoardElem = boardElem;
-
-        initialize();	
-		clearInterval(waitForChessBoard);
+        clearInterval(waitForChessBoard);
+        initialize();
     }
-}, 2000);
-
-
-async function initializeDatabase(callback) {
-    nightMode = false;
-    engineMode = 0;
-    engineIndex = 0;
-    reload_engine = false;
-    reload_every = 10;
-    enableUserLog = true;
-    enableEngineLog = true;
-    displayMovesOnSite = false;
-    show_opposite_moves = false;
-    use_book_moves = false;
-    node_engine_url = "http://localhost:5000";
-    node_engine_name = "stockfish-15.exe"
-    current_depth = Math.round(MAX_DEPTH / 2);
-    current_movetime = Math.round(MAX_MOVETIME / 3);
-    max_best_moves = 1;
-
-    if (GM_getValue(dbValues.nightMode) == undefined) {
-        await GM_setValue(dbValues.nightMode, nightMode);
-        await GM_setValue(dbValues.engineMode, engineMode);
-        await GM_setValue(dbValues.engineIndex, engineIndex);
-        await GM_setValue(dbValues.reload_engine, reload_engine);
-        await GM_setValue(dbValues.reload_every, reload_every);
-        await GM_setValue(dbValues.enableUserLog, enableUserLog);
-        await GM_setValue(dbValues.enableEngineLog, enableEngineLog);
-        await GM_setValue(dbValues.displayMovesOnSite, displayMovesOnSite);
-        await GM_setValue(dbValues.show_opposite_moves, show_opposite_moves);
-        await GM_setValue(dbValues.use_book_moves, use_book_moves);
-        await GM_setValue(dbValues.node_engine_url, node_engine_url);
-        await GM_setValue(dbValues.node_engine_name, node_engine_name);
-        await GM_setValue(dbValues.current_depth, current_depth);
-        await GM_setValue(dbValues.current_movetime, current_movetime);
-        await GM_setValue(dbValues.max_best_moves, max_best_moves);
-        callback();
-    } else {
-        nightMode = await GM_getValue(dbValues.nightMode);
-        engineMode = await GM_getValue(dbValues.engineMode);
-        engineIndex = await GM_getValue(dbValues.engineIndex);
-        reload_engine = await GM_getValue(dbValues.reload_engine);
-        reload_every = await GM_getValue(dbValues.reload_every);
-        enableUserLog = await GM_getValue(dbValues.enableUserLog);
-        enableEngineLog = await GM_getValue(dbValues.enableEngineLog);
-        displayMovesOnSite = await GM_getValue(dbValues.displayMovesOnSite);
-        show_opposite_moves = await GM_getValue(dbValues.show_opposite_moves);
-        use_book_moves = await GM_getValue(dbValues.use_book_moves);
-        node_engine_url = await GM_getValue(dbValues.node_engine_url);
-        node_engine_name = await GM_getValue(dbValues.node_engine_name);
-        current_depth = await GM_getValue(dbValues.current_depth);
-        current_movetime = await GM_getValue(dbValues.current_movetime);
-        max_best_moves = await GM_getValue(dbValues.max_best_moves);
-        callback();
-    }
-}
+}, 1000);
