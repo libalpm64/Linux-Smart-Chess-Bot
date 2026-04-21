@@ -41,11 +41,11 @@ const MAX_LOGS          = 50;
 
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
-// Engine index → resource name mapping (index 4 = node server, index 5 = WASM engine)
+// Engine index → resource name mapping (index 4 = stockfish-18, index 5 = node server)
 const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js'];
-const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18'];
-const ENGINE_WASM      = 4;
-const node_engine_id    = 4; // index for node server
+const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 Lite'];
+const ENGINE_WASM        = 4;
+const node_engine_id    = 5; // index for node server
 
 const best_move_color                = [0,   0,   250, 0.5];
 const opposite_best_move_color       = [250, 0,   0,   0.5];
@@ -597,10 +597,12 @@ function getNodeBestMoves(request) {
 }
 
 function getBestMoves(request) {
-    if (engineIndex === node_engine_id || CURRENT_SITE === LICHESS_ORG)
+    if (engineIndex === node_engine_id)
         return getNodeBestMoves(request);
 
-    engine.postMessage(`position fen ${request.fen}`);
+    if (!engine) return;
+
+    engine.postMessage('position fen ' + request.fen);
     engine.postMessage(engineMode === DEPTH_MODE
         ? `go depth ${current_depth}` : `go movetime ${current_movetime}`);
 
@@ -628,23 +630,55 @@ function loadChessEngine(callback) {
     const engineName = ENGINE_RESOURCES[engineIndex];
     const engineBase = `${repositoryRawURL}/engines`;
 
-    if (engineIndex === ENGINE_WASM) {
-        const engineWasm = `${engineBase}/wasm/stockfish-18.wasm`;
+if (engineIndex === ENGINE_WASM) {
+        // Use single-threaded lite version
+        const wasmBase = `${engineBase}/wasm`;
+        const jsFile = 'stockfish-18-lite.js';
+        const wasmFile = 'stockfish-18-lite.wasm';
         
-        fetch(`${engineBase}/wasm/stockfish-18.js`).then(r => r.text()).then(src => {
-            const patched = src.replace(
-                'e=e||{},(c=c||(void 0!==e?e:{})',
-                `e=e||{},(c=c||(void 0!==e?e:{})).locateFile=function(e){return"${engineWasm}"}`
-            );
-            engineObjectURL = URL.createObjectURL(
-                new Blob([patched], { type: 'application/javascript' }));
-            loadedEngineIndex = ENGINE_WASM;
+        Interface.log('SF18-Lite loading...');
+        
+        // Fetch JS then load
+        fetch(`${wasmBase}/${jsFile}`).then(function(r) {
+            return r.text();
+        }).then(function(js) {
+            var workerCode = js + `
+                var wasmPath = '${wasmBase}/${wasmFile}';
+                self.onmessage = function(e) {
+                    if (typeof loadEngine === 'function') {
+                        if (!sfEngine) {
+                            loadEngine(wasmPath).then(function(eng) {
+                                sfEngine = eng;
+                                eng.stream = function(line) { postMessage(line); };
+                                postMessage('SF ready');
+                            });
+                        } else {
+                            sfEngine.send(e.data);
+                        }
+                    } else {
+                        postMessage('loadEngine missing');
+                    }
+                };
+                self.postMessage('init');
+            `;
+            
+            var blob = new Blob([workerCode], { type: 'application/javascript' });
+            engineObjectURL = URL.createObjectURL(blob);
             engine = new Worker(engineObjectURL);
-            engine.postMessage('ucinewgame');
-            Interface.log(`Loaded engine: ${ENGINE_NAMES[ENGINE_WASM]}`);
-        }).catch(e => {
-            Interface.log(`Failed to load engine: ${e}`);
+            
+            engine.onmessage = function(e) {
+                if (e.data === 'SF ready') {
+                    Interface.log('Loaded: ' + ENGINE_NAMES[ENGINE_WASM]);
+                } else {
+                    Interface.engineLog(e.data);
+                }
+            };
+            
+            engine.onerror = function(e) {
+                Interface.log('SF err: ' + e.message);
+            };
         });
+        
         return callback();
     }
 
@@ -1073,15 +1107,12 @@ function openGUI() {
             });
         }
 
-        // Lichess overrides
+        // Lichess overrides - use stockfish-18 by default
         if (CURRENT_SITE === LICHESS_ORG) {
-            engineEl?.querySelectorAll('option').forEach((opt, i) => {
-                if (i < node_engine_id) opt.disabled = true;
-            });
-            if (engineEl) engineEl.selectedIndex = node_engine_id;
+            if (engineEl) engineEl.selectedIndex = ENGINE_WASM;
             if (maxMovesDivEl)    maxMovesDivEl.style.display    = 'none';
-            if (engineNameDivEl)  engineNameDivEl.style.display  = 'block';
-            if (reloadEngineDivEl) reloadEngineDivEl.style.display = 'none';
+            if (engineNameDivEl)  engineNameDivEl.style.display  = 'none';
+            if (reloadEngineDivEl) reloadEngineDivEl.style.display = 'block';
         }
 
         // ── Event listeners ──
