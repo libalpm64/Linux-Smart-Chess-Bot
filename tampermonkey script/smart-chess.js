@@ -42,8 +42,8 @@ const MAX_LOGS          = 50;
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
 // Engine index → resource name mapping (index 4 = stockfish-18, index 5 = node server)
-const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js'];
-const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 Lite'];
+const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js'];
+const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM'];
 const ENGINE_WASM        = 4;
 const node_engine_id    = 5; // index for node server
 
@@ -631,52 +631,23 @@ function loadChessEngine(callback) {
     const engineBase = `${repositoryRawURL}/engines`;
 
 if (engineIndex === ENGINE_WASM) {
-        // Use single-threaded lite version
-        const wasmBase = `${engineBase}/wasm`;
-        const jsFile = 'stockfish-18-lite.js';
-        const wasmFile = 'stockfish-18-lite.wasm';
+        // ASM version - load like regular engine
+        const base = repositoryRawURL + '/engines/js';
+        const jsFile = 'stockfish-18-asm.js';
         
-        Interface.log('SF18-Lite loading...');
+        Interface.log('SF18-ASM loading...');
         
-        // Fetch JS then load
-        fetch(`${wasmBase}/${jsFile}`).then(function(r) {
+        fetch(base + '/' + jsFile).then(function(r) {
             return r.text();
-        }).then(function(js) {
-            var workerCode = js + `
-                var wasmPath = '${wasmBase}/${wasmFile}';
-                self.onmessage = function(e) {
-                    if (typeof loadEngine === 'function') {
-                        if (!sfEngine) {
-                            loadEngine(wasmPath).then(function(eng) {
-                                sfEngine = eng;
-                                eng.stream = function(line) { postMessage(line); };
-                                postMessage('SF ready');
-                            });
-                        } else {
-                            sfEngine.send(e.data);
-                        }
-                    } else {
-                        postMessage('loadEngine missing');
-                    }
-                };
-                self.postMessage('init');
-            `;
-            
-            var blob = new Blob([workerCode], { type: 'application/javascript' });
-            engineObjectURL = URL.createObjectURL(blob);
+        }).then(function(src) {
+            engineObjectURL = URL.createObjectURL(
+                new Blob([src], { type: 'application/javascript' }));
+            loadedEngineIndex = ENGINE_WASM;
             engine = new Worker(engineObjectURL);
-            
-            engine.onmessage = function(e) {
-                if (e.data === 'SF ready') {
-                    Interface.log('Loaded: ' + ENGINE_NAMES[ENGINE_WASM]);
-                } else {
-                    Interface.engineLog(e.data);
-                }
-            };
-            
-            engine.onerror = function(e) {
-                Interface.log('SF err: ' + e.message);
-            };
+            engine.postMessage('ucinewgame');
+            Interface.log('Loaded: ' + ENGINE_NAMES[ENGINE_WASM]);
+        }).catch(function(e) {
+            Interface.log('SF ASM error: ' + e);
         });
         
         return callback();
