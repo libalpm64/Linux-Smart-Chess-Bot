@@ -17,9 +17,9 @@
 // @resource    jquery.js       	https://cdn.jsdelivr.net/npm/jquery@3.6.3/dist/jquery.min.js
 // @resource    chessboard.js   	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.js
 // @resource    chessboard.css  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.css
-// @resource    lozza.js        	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/lozza.js
-// @resource    stockfish-5.js  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-5.js
-// @resource    stockfish-2018.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/stockfish-2018.js
+// @resource    lozza.js        	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/engines/js/lozza.js
+// @resource    stockfish-5.js  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/engines/js/stockfish-5.js
+// @resource    stockfish-2018.js   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/engines/js/stockfish-2018.js
 // @run-at      document-start
 // @inject-into content
 // @downloadURL https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/smart-chess.js
