@@ -13,7 +13,7 @@
 // @grant       GM_getResourceText
 // @grant       GM_registerMenuCommand
 // @description 	Our chess analysis system is designed to give players the edge they need to win. By using advanced algorithms and cutting-edge technology, our system can analyze any chess position and suggest the best possible move, helping players to make smarter and more informed decisions on the board.
-// @require     https://greasyfork.org/scripts/460400-usergui-js/code/userguijs.js?version=1157130
+// @require     https://raw.githubusercontent.com/AugmentedWeb/UserGui/main/usergui.js
 // @resource    jquery.js       	https://cdn.jsdelivr.net/npm/jquery@3.6.3/dist/jquery.min.js
 // @resource    chessboard.js   	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.js
 // @resource    chessboard.css  	https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/main/tampermonkey%20script/content/chessboard.css
