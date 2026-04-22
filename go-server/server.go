@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -19,16 +20,32 @@ type EngineResponse struct {
 	Engine string `json:"engine"`
 }
 
-var engines = map[string]string{
-	"komodo-201-64": "engines/bin/komodo-201-64",
+func loadEngines() (map[string]string, string) {
+	engines := make(map[string]string)
+	files, _ := os.ReadDir("engines/bin")
+	for _, f := range files {
+		if !f.IsDir() {
+			name := f.Name()
+			engines[name] = "engines/bin/" + name
+		}
+	}
+	defaultEngine := ""
+	for k := range engines {
+		defaultEngine = k
+		break
+	}
+	return engines, defaultEngine
 }
 
-var defaultEngine = "komodo-201-64"
+var engines, defaultEngine = loadEngines()
 
 func executeEngine(fen, depth, engineName string) (string, error) {
 	enginePath, ok := engines[engineName]
 	if !ok {
-		enginePath = engines[defaultEngine]
+		enginePath, ok = engines[defaultEngine]
+		if !ok {
+			return "", fmt.Errorf("no engines found")
+		}
 	}
 
 	cmd := exec.Command(enginePath)
@@ -40,15 +57,17 @@ func executeEngine(fen, depth, engineName string) (string, error) {
 		return "", err
 	}
 
-	fmt.Fprintf(stdin, "uci\nisready\n")
-	fmt.Fprintf(stdin, "position fen %s\n", fen)
-	fmt.Fprintf(stdin, "go depth %s\n", depth)
-	fmt.Fprintf(stdin, "quit\n")
+	writer := bufio.NewWriter(stdin)
+	scanner := bufio.NewScanner(stdout)
+
+	fmt.Fprintf(writer, "uci\n")
+	fmt.Fprintf(writer, "position fen %s\n", fen)
+	fmt.Fprintf(writer, "go depth %s\n", depth)
+	fmt.Fprintf(writer, "quit\n")
+	writer.Flush()
 	stdin.Close()
 
 	var bestMove string
-	scanner := bufio.NewScanner(stdout)
-
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Fields(line)

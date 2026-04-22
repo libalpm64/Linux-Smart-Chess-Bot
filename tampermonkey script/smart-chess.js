@@ -72,7 +72,7 @@ let displayMovesOnSite  = false;
 let show_opposite_moves = false;
 let use_book_moves      = false;
 let node_engine_url     = 'http://localhost:5000';
-let node_engine_name    = 'stockfish-15.exe';
+let node_engine_name    = 'komodo-201-64';
 let current_depth       = Math.round(MAX_DEPTH / 2);
 let current_movetime    = Math.round(MAX_MOVETIME / 3);
 let max_best_moves      = 1;
@@ -765,7 +765,7 @@ function getBookMoves(request) {
 function getNodeBestMoves(request) {
     const url = `${node_engine_url}/getBestMove?fen=${encodeURIComponent(request.fen)}`
         + `&engine_mode=${engineMode}&depth=${current_depth}&movetime=${current_movetime}`
-        + `&turn=${encodeURIComponent(last_turn || turn)}&engine_name=${encodeURIComponent(node_engine_name)}`;
+        + `&turn=${encodeURIComponent(last_turn || turn)}&engine=${encodeURIComponent(node_engine_name)}`;
     GM_xmlhttpRequest({
         method: 'GET', url,
         headers: { 'Content-Type': 'application/json' },
@@ -1392,7 +1392,7 @@ async function initializeDatabase(callback) {
         reload_engine: false, reload_every: 10,
         enableUserLog: true, enableEngineLog: true,
         displayMovesOnSite: false, show_opposite_moves: false, use_book_moves: false,
-        node_engine_url: 'http://localhost:5000', node_engine_name: 'stockfish-15.exe',
+        node_engine_url: 'http://localhost:5000', node_engine_name: 'komodo-201-64',
         current_depth: Math.round(MAX_DEPTH / 2), current_movetime: Math.round(MAX_MOVETIME / 3),
         max_best_moves: 1
     };
