@@ -23,12 +23,11 @@
 // @updateURL   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/system_meta.js
 // ==/UserScript==
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const repositoryRawURL  = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main';
 const LICHESS_API       = 'https://lichess.org/api/cloud-eval';
 const CHESS_COM         = 0;
 const LICHESS_ORG       = 1;
-const TURN_UPDATE_FIX   = false;
+const TURN_UPDATE_FIX   = true;
 
 const MAX_DEPTH         = 20;
 const MIN_DEPTH         = 1;
@@ -36,16 +35,14 @@ const MAX_MOVETIME      = 2000;
 const MIN_MOVETIME      = 50;
 const MAX_ELO           = 3500;
 const DEPTH_MODE        = 0;
-// const MOVETIME_MODE  = 1;  // reserved
 const MAX_LOGS          = 50;
 
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
-// Engine index → resource name mapping (index 4 = stockfish-18, index 5 = node server)
 const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js'];
 const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM'];
 const ENGINE_WASM        = 4;
-const node_engine_id    = 5; // index for node server
+const node_engine_id    = 5;
 
 const best_move_color                = [0,   0,   250, 0.5];
 const opposite_best_move_color       = [250, 0,   0,   0.5];
@@ -54,7 +51,6 @@ const opposite_possible_moves_colors = [[250,200,200,0.9],[250,150,150,0.9],[250
 const defaultFromSquareStyle = 'border:4px solid rgb(0 0 0/50%);';
 const defaultToSquareStyle   = 'border:4px dashed rgb(0 0 0/50%);';
 
-// GM storage keys
 const DB = {
     nightMode:'nightMode', engineMode:'engineMode', engineIndex:'engineIndex',
     reload_every:'reload_every', reload_engine:'reload_engine',
@@ -65,7 +61,6 @@ const DB = {
     current_movetime:'current_movetime', max_best_moves:'max_best_moves'
 };
 
-// ─── Mutable state ────────────────────────────────────────────────────────────
 let nightMode           = false;
 let engineMode          = 0;
 let engineIndex         = 0;
@@ -94,7 +89,7 @@ let firstPieceElem      = null;
 let forcedBestMove      = false;
 let engine              = null;
 let engineObjectURL     = null;
-let loadedEngineIndex = -1;
+let loadedEngineIndex   = -1;
 
 let chessBoardElem      = null;
 let turn                = '-';
@@ -113,14 +108,12 @@ let userscriptLogNum    = 1;
 let enemyScore          = 0;
 let myScore             = 0;
 
-// ─── GUI singleton ────────────────────────────────────────────────────────────
 const Gui = new UserGui();
 Gui.settings.window.title    = 'Smart Chess Bot';
 Gui.settings.window.external = true;
 Gui.settings.window.size     = { width: 500, height: 620 };
 Gui.settings.gui.external    = { popup: true, style: '' };
 
-// Inject chessboard.css + layout overrides into the popup's <style>
 Gui.settings.gui.external.style += GM_getResourceText('chessboard.css');
 Gui.settings.gui.external.style += `
 </style><style>
@@ -141,7 +134,6 @@ body { display:block; margin:0 auto; width:360px; }
 .wiggle { display:inline-block; animation:wiggle 1s infinite; }
 `;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const isFirefox         = () => navigator.userAgent.toLowerCase().includes('firefox');
 const alphabetPosition  = ch => ch.charCodeAt(0) - 97;
 const removeDuplicates  = arr => [...new Set(arr)];
@@ -152,113 +144,185 @@ function fenSquareToChessComSquare(sq) {
     return `square-${'abcdefgh'.indexOf(x) + 1}${y}`;
 }
 
-// ─── FenUtils ─────────────────────────────────────────────────────────────────
-function FenUtils() {
-    // Fresh 8×8 board filled with 1 (empty)
-    this.board = Array.from({ length: 8 }, () => Array(8).fill(1));
+const pieceNameToFen = { pawn: 'p', knight: 'n', bishop: 'b', rook: 'r', queen: 'q', king: 'k' };
 
-    this.pieceCodeToFen = str => {
-        const [color, name] = str.split('');
-        return color === 'w' ? name.toUpperCase() : name.toLowerCase();
+function chessCoordinatesToIndex(coord) {
+    if (!coord) return null;
+    const x = coord.charCodeAt(0) - 97;
+    const y = Number(coord.slice(1)) - 1;
+    return [x, y];
+}
+
+function FenUtils() {
+    this.getPieceOppositeColor = s => (s === s.toUpperCase() ? 'b' : 'w');
+
+    this.getFenCodeFromPieceElem = elem => {
+        if (CURRENT_SITE === CHESS_COM)   return this.getChessComPieceFen(elem);
+        if (CURRENT_SITE === LICHESS_ORG) return this.getLichessPieceFen(elem);
+        return null;
     };
 
-    /**
-     * Returns the FEN character for a piece element on the LIVE BOARD.
-     * Chess.com pieces have classes like "wp", "bk", "wn" etc.
-     * Lichess pieces expose `.cgPiece` as e.g. "white king".
-     * Returns null if the element has no recognizable color class yet
-     * (e.g. animation ghost) — callers must guard for null.
-     */
-    this.getFenCodeFromPieceElem = elem => {
-        if (CURRENT_SITE === CHESS_COM) {
-            const cls = [...elem.classList].find(c => /^(b|w)[prnbqk]$/.test(c));
-            if (!cls) return null;
-            return this.pieceCodeToFen(cls);
-        } else if (CURRENT_SITE === LICHESS_ORG) {
-            let cp = elem.cgPiece || elem.dataset?.role || elem.getAttribute('data-role');
-            if (!cp) {
-                const role = elem.getAttribute('data-role') || elem.classList?.find(c => c.startsWith('role-'));
-                const color = elem.getAttribute('data-color') || elem.classList?.find(c => c === 'white' || c === 'black');
-                if (role && color) {
-                    const roleMap = { pawn: 'p', knight: 'n', bishop: 'b', rook: 'r', queen: 'q', king: 'k' };
-                    const r = role.replace('role-', '');
-                    return this.pieceCodeToFen((color[0]) + (roleMap[r] || r[0]));
-                }
-                return null;
-            }
-            const [color, name] = cp.split(' ');
-            return this.pieceCodeToFen(color[0] + (name === 'knight' ? 'n' : name[0]));
+    this.squeezeEmptySquares = fen =>
+        fen.replace(/11111111/g, '8').replace(/1111111/g, '7').replace(/111111/g, '6')
+            .replace(/11111/g, '5').replace(/1111/g, '4').replace(/111/g, '3').replace(/11/g, '2');
+
+    this.getLichessPieceFen = elem => {
+        const pieceColor = elem.classList?.contains('white') ? 'w' : 'b';
+        const elemPieceName = [...elem.classList]?.find(className => Object.keys(pieceNameToFen).includes(className));
+        if (pieceColor && elemPieceName) {
+            const pieceName = pieceNameToFen[elemPieceName];
+            return pieceColor === 'w' ? pieceName.toUpperCase() : pieceName;
         }
         return null;
     };
 
-    this.getPieceColor         = s => (s === s.toUpperCase() ? 'w' : 'b');
-    this.getPieceOppositeColor = s => (this.getPieceColor(s) === 'w' ? 'b' : 'w');
-
-    this.squeezeEmptySquares = fen =>
-        fen.replace(/11111111/g,'8').replace(/1111111/g,'7').replace(/111111/g,'6')
-           .replace(/11111/g,'5').replace(/1111/g,'4').replace(/111/g,'3').replace(/11/g,'2');
-
-    this.posToIndex = pos => {
-        const [x, y] = pos.split('');
-        return { y: 8 - Number(y), x: 'abcdefgh'.indexOf(x) };
+    this.getChessComPieceFen = elem => {
+        const cls = [...elem.classList].find(c => /^(b|w)[prnbqk]$/.test(c));
+        if (!cls) return null;
+        const [color, name] = cls.split('');
+        return color === 'w' ? name.toUpperCase() : name.toLowerCase();
     };
 
-    this.getBoardPiece = pos => {
-        const { y, x } = this.posToIndex(pos);
-        return this.board[y][x];
+    this.buildBoard = () => {
+        if (CURRENT_SITE === LICHESS_ORG) {
+            const fenInput = document.querySelector('.fen-pnl input, .analyse__controls input.fen, input[name="fen"]');
+            if (fenInput && fenInput.value) {
+                const fenStr = fenInput.value.trim().split(' ')[0];
+                const rows = fenStr.split('/');
+                const board = [];
+                
+                rows.forEach(rowStr => {
+                    const row = [];
+                    for (let char of rowStr) {
+                        if (/\d/.test(char)) {
+                            for (let i = 0; i < parseInt(char); i++) row.push(1);
+                        } else {
+                            row.push(char);
+                        }
+                    }
+                    board.push(row);
+                });
+                return board;
+            }
+        }
+
+        const board = Array.from({ length: 8 }, () => Array(8).fill(1));
+
+        if (CURRENT_SITE === CHESS_COM) {
+            const pieceElems = chessBoardElem?.querySelectorAll('.piece') || [];
+            pieceElems.forEach(pieceElem => {
+                const pieceFenCode = this.getChessComPieceFen(pieceElem);
+                const m = pieceElem.className.match(/square-(\d)(\d)/);
+                if (pieceFenCode && m) {
+                    board[8 - Number(m[2])][Number(m[1]) - 1] = pieceFenCode;
+                }
+            });
+            return board;
+        }
+
+        const cgContainer = document.querySelector('cg-container');
+        if (!cgContainer) return board;
+
+        const containerWidth = cgContainer.offsetWidth || parseInt(cgContainer.style.width) || 512;
+        const squareSize = containerWidth / 8;
+        const isFlipped = this.getBoardOrientation() === 'b';
+
+        const pieceElems = cgContainer.querySelectorAll('piece:not(.ghost)');
+        const pieceMap = {
+            'white pawn': 'P', 'white knight': 'N', 'white bishop': 'B',
+            'white rook': 'R', 'white queen': 'Q', 'white king': 'K',
+            'black pawn': 'p', 'black knight': 'n', 'black bishop': 'b',
+            'black rook': 'r', 'black queen': 'q', 'black king': 'k'
+        };
+
+        pieceElems.forEach(p => {
+            const transform = p.style.transform;
+            const vals = transform.match(/[\d.]+/g);
+            if (!vals || vals.length < 2) return;
+
+            let vCol = Math.round(parseFloat(vals[0]) / squareSize);
+            let vRow = Math.round(parseFloat(vals[1]) / squareSize);
+
+            let col = isFlipped ? (7 - vCol) : vCol;
+            let row = isFlipped ? (7 - vRow) : vRow;
+
+            if (col < 0 || col > 7 || row < 0 || row > 7) return;
+
+            const key = Object.keys(pieceMap).find(k =>
+                k.split(' ').every(cls => p.classList.contains(cls)));
+
+            if (key) board[row][col] = pieceMap[key];
+        });
+
+        return board;
     };
 
-    this.getRights = () => {
+    this.getBoardOrientation = () => {
+        if (CURRENT_SITE === LICHESS_ORG) {
+            return document.querySelector('.cg-wrap')?.classList?.contains('orientation-black') ? 'b' : 'w';
+        }
+        return document.querySelector('.board.flipped') ? 'b' : 'w';
+    };
+
+    this.getTurn = () => {
+        if (CURRENT_SITE === LICHESS_ORG) {
+            const fenInput = document.querySelector('.fen-pnl input, .analyse__controls input.fen, input[name="fen"]');
+            
+            if (fenInput && fenInput.value) {
+                const parts = fenInput.value.trim().split(/\s+/);
+                if (parts.length >= 2) {
+                    const turnChar = parts[1].toLowerCase();
+                    if (turnChar === 'w' || turnChar === 'b') {
+                        return turnChar;
+                    }
+                }
+            }
+
+            const boardWrap = document.querySelector('.cg-wrap');
+            const isFlipped = boardWrap?.classList?.contains('orientation-black');
+            const myColor = isFlipped ? 'b' : 'w';
+            const allMoves = document.querySelectorAll('.puzzle__moves move, .move-list move');
+            if (allMoves.length > 0) {
+                return (allMoves.length % 2 === 0) ? 'w' : 'b';
+            }
+            return myColor;
+        }
+        return typeof turn !== 'undefined' ? turn : 'w';
+    };
+
+    this.getBoardPiece = (fenCoord, board) => {
+        const indexArr = chessCoordinatesToIndex(fenCoord);
+        if (!indexArr) return null;
+        return board?.[7 - indexArr[1]]?.[indexArr[0]];
+    };
+
+    this.getRights = board => {
         let r = '';
-        const [e1,h1,a1,e8,h8,a8] = ['e1','h1','a1','e8','h8','a8'].map(p => this.getBoardPiece(p));
-        if (e1==='K' && h1==='R') r += 'K';
-        if (e1==='K' && a1==='R') r += 'Q';
-        if (e8==='k' && h8==='r') r += 'k';
-        if (e8==='k' && a8==='r') r += 'q';
+        const e1 = this.getBoardPiece('e1', board);
+        const h1 = this.getBoardPiece('h1', board);
+        const a1 = this.getBoardPiece('a1', board);
+        const e8 = this.getBoardPiece('e8', board);
+        const h8 = this.getBoardPiece('h8', board);
+        const a8 = this.getBoardPiece('a8', board);
+        if (e1 === 'K' && h1 === 'R') r += 'K';
+        if (e1 === 'K' && a1 === 'R') r += 'Q';
+        if (e8 === 'k' && h8 === 'r') r += 'k';
+        if (e8 === 'k' && a8 === 'r') r += 'q';
         return r || '-';
     };
 
-    this.getBasicFen = () => {
-        const sel = CURRENT_SITE === CHESS_COM ? '.piece' : 'piece, .cg-piece, [data-role]';
-        [...chessBoardElem.querySelectorAll(sel)]
-            .filter(e => !e.classList.contains('ghost'))
-            .forEach(e => {
-                const code = this.getFenCodeFromPieceElem(e);
-                if (code === null) return; // skip ghosts / animating pieces with no color yet
-
-                if (CURRENT_SITE === CHESS_COM) {
-                    const m = e.className.match(/square-(\d)(\d)/);
-                    if (!m) return;
-                    this.board[8 - Number(m[2])][Number(m[1]) - 1] = code;
-                } else {
-                    let key = e.cgKey || e.dataset?.key || e.getAttribute('data-key') || e.getAttribute('data-square');
-                    if (key) {
-                        const [x, y] = key.split('');
-                        this.board[8 - Number(y)][alphabetPosition(x)] = code;
-                    } else {
-                        const pos = elem.style.left || elem.style.transform;
-                        if (pos) {
-                            const m = pos.match(/(\d+)%/);
-                            if (m) {
-                                const col = Math.floor(parseInt(m[1]) / 12.5);
-                                const row = Math.floor(parseInt(m[1]) / 12.5);
-                            }
-                        }
-                    }
-                }
-            });
-        return this.squeezeEmptySquares(this.board.map(r => r.join('')).join('/'));
+    this.getFen = () => {
+        const board = this.buildBoard();
+        const basicFen = this.squeezeEmptySquares(board.map(r => r.join('')).join('/'));
+        const t = this.getTurn();
+        const rights = this.getRights(board);
+        return `${basicFen} ${t} ${rights} - 0 1`;
     };
-
-    this.getFen = () => `${this.getBasicFen()} ${last_turn || turn} ${this.getRights()} - 0 1`;
 }
 
-// ─── InterfaceUtils ───────────────────────────────────────────────────────────
 function InterfaceUtils() {
-    // Single-element query cache keyed by CSS selector string
     const cache = {};
-    const $  = sel => Gui.document && (cache[sel] !== undefined ? cache[sel] : (cache[sel] = Gui.document.querySelector(sel)));
+    const $ = sel => Gui.document && (cache[sel] !== undefined ? cache[sel] : (cache[sel] = Gui.document.querySelector(sel)));
 
     this.boardUtils = {
         findSquareElem: code => Gui.document?.querySelector(`.square-${code}`),
@@ -303,7 +367,6 @@ function InterfaceUtils() {
         }
     };
 
-    // Shared log helper
     const appendLog = (containerId, str, num) => {
         const container = Gui.document?.querySelector(containerId);
         if (!container) return;
@@ -360,10 +423,129 @@ function LozzaUtility() {
         }, {});
 }
 
-// ─── Site move highlighting ───────────────────────────────────────────────────
+let _lichessSvgLayer   = null;
+let _lichessArrowNodes = [];
+
+function _getLichessSvgLayer() {
+    if (_lichessSvgLayer && _lichessSvgLayer.isConnected) return _lichessSvgLayer;
+
+    document.getElementById('scb-svg-hud')?.remove();
+    _lichessArrowNodes = [];
+
+    const cgWrap = document.querySelector('.cg-wrap');
+    if (!cgWrap) return null;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'scb-svg-hud';
+    Object.assign(svg.style, {
+        position:      'absolute',
+        top:           '0',
+        left:          '0',
+        width:         '100%',
+        height:        '100%',
+        pointerEvents: 'none',
+        // Z-Index is high because it will opaque out Lichess's DOM element override
+        zIndex:        '100',
+        overflow:      'visible',
+    });
+    svg.setAttribute('viewBox', '0 0 8 8');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const makeMarker = (id, color) => {
+        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.setAttribute('id', id);
+        marker.setAttribute('viewBox', '0 0 10 10');
+        marker.setAttribute('refX', '8');
+        marker.setAttribute('refY', '5');
+        marker.setAttribute('markerWidth', '3');
+        marker.setAttribute('markerHeight', '3');
+        marker.setAttribute('orient', 'auto');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+        path.setAttribute('fill', color);
+        marker.appendChild(path);
+        return marker;
+    };
+    defs.appendChild(makeMarker('scb-head-blue',   'rgba(0,0,250,0.9)'));
+    defs.appendChild(makeMarker('scb-head-red',    'rgba(250,0,0,0.9)'));
+    defs.appendChild(makeMarker('scb-head-yellow', 'rgba(200,180,0,0.9)'));
+    defs.appendChild(makeMarker('scb-head-orange', 'rgba(250,150,0,0.9)'));
+    svg.appendChild(defs);
+
+    const existingPos = window.getComputedStyle(cgWrap).position;
+    if (existingPos === 'static') cgWrap.style.position = 'relative';
+
+    cgWrap.appendChild(svg);
+    _lichessSvgLayer = svg;
+    return svg;
+}
+
+function _sqToSvgCoords(notation) {
+    const wrap    = document.querySelector('.cg-wrap');
+    const isBlack = wrap?.classList.contains('orientation-black');
+    const files   = { a:0, b:1, c:2, d:3, e:4, f:5, g:6, h:7 };
+    let x = files[notation[0]];
+    let y = 8 - parseInt(notation[1]);
+    if (isBlack) { x = 7 - x; y = 7 - y; }
+    return (x === undefined || isNaN(y)) ? null : { x, y };
+}
+
+function _pickSvgMarker(rgba) {
+    if (rgba[2] > rgba[0]) return 'scb-head-blue';
+    if (rgba[0] >= 250)    return 'scb-head-red';
+    if (rgba[0] >= 200)    return 'scb-head-yellow';
+    return 'scb-head-orange';
+}
+
+function _drawLichessArrow(svg, fromSq, toSq, rgba, lineIndex) {
+    const s = _sqToSvgCoords(fromSq);
+    const e = _sqToSvgCoords(toSq);
+    if (!s || !e) return;
+
+    const strokeColor = `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${rgba[3] ?? 0.85})`;
+    const fillColor   = `rgba(${rgba[0]},${rgba[1]},${rgba[2]},0.15)`;
+
+    const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    box.setAttribute('x',            s.x + 0.05);
+    box.setAttribute('y',            s.y + 0.05);
+    box.setAttribute('width',        '0.9');
+    box.setAttribute('height',       '0.9');
+    box.setAttribute('fill',         fillColor);
+    box.setAttribute('stroke',       strokeColor);
+    box.setAttribute('stroke-width', '0.06');
+    svg.appendChild(box);
+    _lichessArrowNodes.push(box);
+
+    const x1 = s.x + 0.5, y1 = s.y + 0.5;
+    const x2 = e.x + 0.5, y2 = e.y + 0.5;
+    const bend = lineIndex * 0.18;
+    let d;
+    if (bend === 0) {
+        d = `M ${x1} ${y1} L ${x2} ${y2}`;
+    } else {
+        const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2;
+        const dx = x2 - x1, dy = y2 - y1;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const cx = midX - dy * (bend / dist);
+        const cy = midY + dx * (bend / dist);
+        d = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+    }
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d',            d);
+    path.setAttribute('fill',         'none');
+    path.setAttribute('stroke',       strokeColor);
+    path.setAttribute('stroke-width', lineIndex === 0 ? '0.13' : '0.09');
+    path.setAttribute('marker-end',   `url(#${_pickSvgMarker(rgba)})`);
+    if (lineIndex > 0) path.setAttribute('stroke-dasharray', '0.12 0.08');
+    svg.appendChild(path);
+    _lichessArrowNodes.push(path);
+}
+
 function markMoveToSite(fromSq, toSq, rgba) {
-    const highlight = (sq, style) => {
-        if (CURRENT_SITE === CHESS_COM) {
+    if (CURRENT_SITE === CHESS_COM) {
+        const highlight = (sq, style) => {
             const cls = fenSquareToChessComSquare(sq);
             document.querySelector(`${TURN_UPDATE_FIX ? '.custom' : ''}.highlight.${cls}`)?.remove();
             const el = document.createElement('div');
@@ -373,36 +555,28 @@ function markMoveToSite(fromSq, toSq, rgba) {
             el.style.backgroundColor = `rgba(${rgba.join(',')})`;
             activeSiteMoveHighlights.push(el);
             chessBoardElem.prepend(el);
-        } else if (CURRENT_SITE === LICHESS_ORG) {
-            const cg = chessBoardElem.querySelector('cg-container');
-            const w = parseInt(cg.style.width)  / 8;
-            const h = parseInt(cg.style.height) / 8;
-            const flipped = !document.querySelector('.orientation-white');
-            const xi = alphabetPosition(sq[0]);
-            const yi = Number(sq[1]);
-            const x  = flipped ? (7 - xi) * w : xi * w;
-            const y  = flipped ? (yi - 1) * h : (8 - yi) * h;
-            const el = document.createElement('square');
-            el.className = 'custom highlight';
-            el.dataset.testElement = 'highlight';
-            el.style.cssText = style;
-            el.style.backgroundColor = `rgba(${rgba.join(',')})`;
-            el.style.transform = `translate(${x}px,${y}px)`;
-            el.style.zIndex = '1';
-            activeSiteMoveHighlights.push(el);
-            cg.prepend(el);
-        }
-    };
-    highlight(fromSq, defaultFromSquareStyle);
-    highlight(toSq,   defaultToSquareStyle);
+        };
+        highlight(fromSq, defaultFromSquareStyle);
+        highlight(toSq,   defaultToSquareStyle);
+        return;
+    }
+
+    if (CURRENT_SITE === LICHESS_ORG) {
+        const svg = _getLichessSvgLayer();
+        if (!svg) return;
+        const lineIndex = Math.floor(_lichessArrowNodes.length / 2);
+        _drawLichessArrow(svg, fromSq, toSq, rgba, lineIndex);
+    }
 }
 
 function removeSiteMoveMarkings() {
     activeSiteMoveHighlights.forEach(el => el?.remove());
     activeSiteMoveHighlights = [];
+
+    _lichessArrowNodes.forEach(n => n?.remove());
+    _lichessArrowNodes = [];
 }
 
-// ─── Turn detection (chess.com fallback) ──────────────────────────────────────
 function getTurn() {
     Interface.boardUtils.removeBestMarkings();
     removeSiteMoveMarkings();
@@ -419,7 +593,6 @@ function getTurn() {
     return '';
 }
 
-// ─── Elo / rank ───────────────────────────────────────────────────────────────
 function getElo() {
     const ratio = engineMode === DEPTH_MODE ? current_depth / MAX_DEPTH : current_movetime / MAX_MOVETIME;
     return Math.round(MAX_ELO * ratio);
@@ -439,7 +612,6 @@ function setEloDescription(eloElem) {
         ? `Depth: ${current_depth}` : `Move Time: ${current_movetime}`;
 }
 
-// ─── Board/move core ──────────────────────────────────────────────────────────
 function clearBoard() {
     Interface.stopBestMoveProcessingAnimation();
     Interface.boardUtils.removeBestMarkings();
@@ -476,26 +648,57 @@ const START_FEN_B = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1';
 
 function updateBoard(clear = true) {
     if (clear) clearBoard();
-    const fen = new FenUtils().getFen();
-    if (fen === START_FEN_W || fen === START_FEN_B) {
+    
+    const fenUtil = new FenUtils();
+    const fen = fenUtil.getFen();
+    const currentTurn = fen.split(' ')[1]; // 'w' or 'b'
+    
+    // Reset scores on start position
+    if (fen.startsWith('rnbqkbnr')) {
         enemyScore = myScore = 0;
         Interface.boardUtils.updateBoardPower(0, 0);
     }
-    isPlayerTurn = playerColor === null || last_turn === null || last_turn === playerColor;
+
+    // If I am White ('w') and Turn is 'w', it is MY turn.
+    // If I am Black ('b') and Turn is 'b', it is MY turn.
+    isPlayerTurn = (currentTurn === playerColor);
+
+    // Update Global State
+    last_turn = currentTurn;
+    turn = currentTurn;
+
     Interface.boardUtils.updateBoardFen(fen);
 }
 
 function sendBestMove() {
+    const feedback = document.querySelector('.puzzle__feedback');
+    if (feedback && feedback.classList.contains('fail')) {
+        Interface.log('Puzzle Failed. Stopping analysis.');
+        clearBoard();
+        return;
+    }
+
+    // Check turn first
     if (!isPlayerTurn && !show_opposite_moves) return;
+
     const fen = new FenUtils().getFen();
+
+    // Check for empty boards and skip engine requests if empty.
+    if (!fen || fen.startsWith('8/8/8/8/8/8/8/8')) {
+        Interface.log('FEN appears empty, skipping engine request.');
+        return;
+    }
+
     possible_moves = [];
     lastBestMoveID++;
     const req = { id: lastBestMoveID, fen };
+    
     reloadChessEngine(false, () => {
         Interface.log('Sending best move request to engine...');
         use_book_moves ? getBookMoves(req) : getBestMoves(req);
     });
 }
+
 
 function updateBestMove(mutationArr) {
     const fenUtil = new FenUtils();
@@ -523,11 +726,10 @@ function updateBestMove(mutationArr) {
     sendBestMove();
 }
 
-// ─── Engine requests ──────────────────────────────────────────────────────────
 function safeParseJSON(text) {
     try {
         const trimmed = (text || '').trim();
-        if (!trimmed || trimmed[0] === '<') return null; // HTML error page guard
+        if (!trimmed || trimmed[0] === '<') return null;
         return JSON.parse(trimmed);
     } catch (_) {
         return null;
@@ -625,18 +827,16 @@ function getBestMoves(request) {
     };
 }
 
-// ─── Engine lifecycle ─────────────────────────────────────────────────────────
 function loadChessEngine(callback) {
     const engineName = ENGINE_RESOURCES[engineIndex];
     const engineBase = `${repositoryRawURL}/engines`;
 
-if (engineIndex === ENGINE_WASM) {
-        // ASM version - load like regular engine
-        const base = repositoryRawURL + '/engines/js';
+    if (engineIndex === ENGINE_WASM) {
+        const base   = repositoryRawURL + '/engines/js';
         const jsFile = 'stockfish-18-asm.js';
-        
+
         Interface.log('SF18-ASM loading...');
-        
+
         fetch(base + '/' + jsFile).then(function(r) {
             return r.text();
         }).then(function(src) {
@@ -649,7 +849,7 @@ if (engineIndex === ENGINE_WASM) {
         }).catch(function(e) {
             Interface.log('SF ASM error: ' + e);
         });
-        
+
         return callback();
     }
 
@@ -686,7 +886,6 @@ function reloadChessEngine(forced, callback) {
     }
 }
 
-// ─── Player / board observation ───────────────────────────────────────────────
 function updatePlayerColor(callback) {
     playerColor = Interface.getBoardOrientation();
     turn = playerColor;
@@ -695,21 +894,54 @@ function updatePlayerColor(callback) {
 }
 
 function observeNewMoves() {
+    // Initial check
     updateBestMove();
-    new MutationObserver(muts => {
-        lastPlayerColor = playerColor;
-        updatePlayerColor(() => {
-            if (playerColor !== lastPlayerColor) {
-                Interface.log(`Color changed: ${lastPlayerColor} → ${playerColor}`);
-                updateBestMove();
-            } else {
-                updateBestMove(muts);
-            }
+
+    let debounceTimer;
+    const handleBoardChange = () => {
+        clearTimeout(debounceTimer);
+        // 100-200ms debounce. If we trigger too early, we catch the board 
+        // in an intermediate state where the FEN hasn't fully settled or the turn is ambiguous.
+        debounceTimer = setTimeout(() => {
+            updateBestMove();
+        }, 250); 
+    };
+    // look at the FEN input
+    const fenInput = document.querySelector('.fen-pnl input, .analyse__controls input.fen, input[name="fen"]');
+    if (fenInput) {
+        new MutationObserver(handleBoardChange).observe(fenInput, { 
+            attributes: true, 
+            attributeFilter: ['value'] 
         });
-    }).observe(chessBoardElem, { childList: true, subtree: true, attributes: true });
+        fenInput.addEventListener('input', handleBoardChange);
+        fenInput.addEventListener('change', handleBoardChange);
+    }
+
+    // look at board container
+    const cgWrap = document.querySelector('.cg-wrap') || chessBoardElem;
+    if (cgWrap) {
+        new MutationObserver((mutations) => {
+            const relevant = mutations.some(m => {
+                if (m.type === 'attributes') {
+                    return m.attributeName === 'class' && 
+                           (m.target.classList.contains('last-move') || 
+                            m.target.tagName === 'PIECE');
+                }
+                return false;
+            });
+            
+            if (relevant) handleBoardChange();
+        }).observe(cgWrap, { 
+            childList: true, 
+            subtree: true, 
+            attributes: true,
+            attributeFilter: ['class', 'style']
+        });
+    }
+
+    Interface.log('Robust observers attached (250ms debounce).');
 }
 
-// ─── Night mode ───────────────────────────────────────────────────────────────
 function applyNightMode() {
     if (!Gui.document) return;
     const toggleSel = (sel, multi) => {
@@ -718,20 +950,20 @@ function applyNightMode() {
             : [Gui.document.querySelector(sel)].filter(Boolean);
         els.forEach(el => el.classList.toggle('night', nightMode));
     };
-    toggleSel('body',                        false);
-    toggleSel('.card',                       true);
-    toggleSel('.card-title',                 true);
-    toggleSel('.form-control',               true);
-    toggleSel('label',                       true);
-    toggleSel('.checkmark',                  true);
-    toggleSel('input',                       true);
-    toggleSel('.list-group',                 true);
-    toggleSel('.card-footer',                true);
-    toggleSel('#fen',                        false);
-    toggleSel('.nav-tabs .nav-link',         true);
+    toggleSel('body',                false);
+    toggleSel('.card',               true);
+    toggleSel('.card-title',         true);
+    toggleSel('.form-control',       true);
+    toggleSel('label',               true);
+    toggleSel('.checkmark',          true);
+    toggleSel('input',               true);
+    toggleSel('.list-group',         true);
+    toggleSel('.card-footer',        true);
+    toggleSel('#fen',                false);
+    toggleSel('.nav-tabs .nav-link', true);
 }
 
-// ─── GUI pages ────────────────────────────────────────────────────────────────
+// GUI pages
 const SETTINGS_CSS = `
 <style>
 body{display:grid;justify-items:center;background:#fff;transition:.2s}
@@ -774,7 +1006,6 @@ label.night,input.night{color:#fff;background:#525252}
 .container .checkmark:after{width:40%;height:70%;margin-left:1px;border:solid white;border-width:0 3px 3px 0;transform:rotate(45deg)}
 </style>`;
 
-// Build engine option list from ENGINE_NAMES + node server
 const engineOptionsHtml = ENGINE_NAMES.map(n => `<option>${n}</option>`).join('')
     + `<option>Node / Go Server</option>`;
 
@@ -782,7 +1013,6 @@ function addGuiPages() {
     if (guiPagesAdded) return;
     guiPagesAdded = true;
 
-    // ── Main ──────────────────────────────────────────────────────────────────
     Gui.addPage('Main', `
     <div class="rendered-form" id="main-tab">
       <div class="card">
@@ -803,7 +1033,6 @@ function addGuiPages() {
       </div>
     </div>`);
 
-    // ── Log ───────────────────────────────────────────────────────────────────
     Gui.addPage('Log', `
     <div class="rendered-form" id="log-tab">
       <div class="card">
@@ -820,7 +1049,6 @@ function addGuiPages() {
       </div>
     </div>`);
 
-    // ── Settings ──────────────────────────────────────────────────────────────
     Gui.addPage('Settings', `
     ${SETTINGS_CSS}
     <div class="rendered-form" id="settings-tab">
@@ -920,14 +1148,8 @@ function addGuiPages() {
     </div>`);
 }
 
-// ─── Open GUI ─────────────────────────────────────────────────────────────────
 function openGUI() {
     Gui.open(() => {
-        /**
-         * The popup window needs jQuery loaded before chessboard.js.
-         * We inject them as <script> tags and wait for both to be ready
-         * before wiring up the board observers.
-         */
         const popDoc  = Gui.document;
         const popHead = popDoc.head;
         const popWin  = Gui.window;
@@ -939,35 +1161,27 @@ function openGUI() {
             popHead.appendChild(s);
         };
 
-        // Inject jQuery first (synchronously from @resource cache), then chessboard.js
         injectScript(GM_getResourceText('jquery.js'));
         injectScript(GM_getResourceText('chessboard.js'));
 
-        // ── Init the visual chessboard in the popup ──
         const fenEl         = q('#fen');
         const orientationEl = q('#orientation');
 
         if (!fenEl) {
-            // FEN element not found — remove board card
             q('#chessboard-card')?.remove();
             q('#orientation')?.remove();
             return;
         }
 
-        // Wait for jQuery and ChessBoard to be available in the popup window
-        // Poll with increasing delays to ensure libraries are fully loaded
         const waitForLibraries = (attempts = 0) => {
-            const maxAttempts = 50; // ~5 seconds total
-            const delay = attempts < 10 ? 50 : 100; // Start fast, then slow down
-            
+            const maxAttempts = 50;
+            const delay = attempts < 10 ? 50 : 100;
             if (attempts >= maxAttempts) {
                 console.warn('UserGui: jQuery or ChessBoard failed to load after multiple attempts');
                 q('#chessboard-card')?.remove();
                 q('#orientation')?.remove();
                 return;
             }
-
-            // Check if both jQuery and ChessBoard are available in popup context
             if (popWin.jQuery && popWin.ChessBoard) {
                 initializeChessboard();
             } else {
@@ -976,9 +1190,6 @@ function openGUI() {
         };
 
         const initializeChessboard = () => {
-            const $ = popWin.jQuery;
-            
-            // Double-check the elements still exist
             if (!q('#board')) {
                 console.warn('UserGui: #board element not found');
                 return;
@@ -990,7 +1201,6 @@ function openGUI() {
                 orientation: playerColor === 'b' ? 'black' : 'white'
             });
 
-            // Verify the board was actually created
             if (!uiBoard) {
                 console.error('UserGui: ChessBoard initialization returned null/undefined');
                 q('#chessboard-card')?.remove();
@@ -999,7 +1209,6 @@ function openGUI() {
 
             console.log('UserGui: ChessBoard successfully initialized');
 
-            // Watch orientation element for flips
             new MutationObserver(() => {
                 try {
                     uiBoard = popWin.ChessBoard('board', {
@@ -1012,23 +1221,18 @@ function openGUI() {
                 }
             }).observe(orientationEl, { childList: true, characterData: true, subtree: true });
 
-            // Watch FEN element for position updates
             new MutationObserver(() => {
-                try { 
+                try {
                     const newFen = fenEl.textContent;
-                    if (newFen && uiBoard) {
-                        uiBoard.position(newFen); 
-                    }
+                    if (newFen && uiBoard) uiBoard.position(newFen);
                 } catch(e) {
                     console.error('UserGui: Error updating board position:', e);
                 }
             }).observe(fenEl, { childList: true, characterData: true, subtree: true });
         };
 
-        // Start waiting for libraries
         waitForLibraries();
 
-        // ── Cache all settings elements ──
         const depthRangeEl       = q('#depth-range');
         const depthRangeNumEl    = q('#depth-range-number');
         const moveTimeRangeEl    = q('#movetime-range');
@@ -1055,13 +1259,11 @@ function openGUI() {
         const tutoEl             = q('#tuto-btn');
         const resetEl            = q('#reset-settings');
 
-        // ── Apply initial state ──
         fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
         if (engineEl)     engineEl.selectedIndex     = engineIndex;
         if (engineModeEl) engineModeEl.selectedIndex = engineMode;
         applyNightMode();
 
-        // Firefox compat
         if (isFirefox()) {
             popDoc.querySelectorAll('.rendered-form').forEach(el => el.style.width = 'auto');
             const gui     = q('#gui');
@@ -1078,15 +1280,13 @@ function openGUI() {
             });
         }
 
-        // Lichess overrides - use stockfish-18 by default
         if (CURRENT_SITE === LICHESS_ORG) {
             if (engineEl) engineEl.selectedIndex = ENGINE_WASM;
-            if (maxMovesDivEl)    maxMovesDivEl.style.display    = 'none';
-            if (engineNameDivEl)  engineNameDivEl.style.display  = 'none';
+            if (maxMovesDivEl)     maxMovesDivEl.style.display     = 'none';
+            if (engineNameDivEl)   engineNameDivEl.style.display   = 'none';
             if (reloadEngineDivEl) reloadEngineDivEl.style.display = 'block';
         }
 
-        // ── Event listeners ──
         if (resetEl) resetEl.onclick = async () => {
             await GM_setValue(DB.nightMode, undefined);
             Gui.close();
@@ -1145,13 +1345,13 @@ function openGUI() {
         if (moveTimeRangeNumEl) moveTimeRangeNumEl.onchange = () => changePower(moveTimeRangeNumEl.value);
         if (maxMovesEl)         maxMovesEl.onchange         = () => { max_best_moves = Number(maxMovesEl.value); GM_setValue(DB.max_best_moves, max_best_moves); };
 
-        if (nodeNameEl)       nodeNameEl.onchange       = () => { node_engine_name = nodeNameEl.value;   GM_setValue(DB.node_engine_name,    node_engine_name);    };
-        if (nodeUrlEl)        nodeUrlEl.onchange        = () => { node_engine_url  = nodeUrlEl.value;    GM_setValue(DB.node_engine_url,     node_engine_url);     };
-        if (useBookEl)        useBookEl.onchange        = () => { use_book_moves   = useBookEl.checked;  GM_setValue(DB.use_book_moves,      use_book_moves);      };
-        if (showOppEl)        showOppEl.onchange        = () => { show_opposite_moves = showOppEl.checked;   GM_setValue(DB.show_opposite_moves, show_opposite_moves); };
-        if (displayOnSiteEl)  displayOnSiteEl.onchange  = () => { displayMovesOnSite  = displayOnSiteEl.checked; GM_setValue(DB.displayMovesOnSite,  displayMovesOnSite);  };
-        if (enableUserLogEl)  enableUserLogEl.onchange  = () => { enableUserLog   = enableUserLogEl.checked;   GM_setValue(DB.enableUserLog,   enableUserLog);   };
-        if (enableEngineLogEl) enableEngineLogEl.onchange = () => { enableEngineLog = enableEngineLogEl.checked; GM_setValue(DB.enableEngineLog, enableEngineLog); };
+        if (nodeNameEl)        nodeNameEl.onchange        = () => { node_engine_name    = nodeNameEl.value;           GM_setValue(DB.node_engine_name,    node_engine_name);    };
+        if (nodeUrlEl)         nodeUrlEl.onchange         = () => { node_engine_url     = nodeUrlEl.value;            GM_setValue(DB.node_engine_url,     node_engine_url);     };
+        if (useBookEl)         useBookEl.onchange         = () => { use_book_moves      = useBookEl.checked;          GM_setValue(DB.use_book_moves,      use_book_moves);      };
+        if (showOppEl)         showOppEl.onchange         = () => { show_opposite_moves = showOppEl.checked;          GM_setValue(DB.show_opposite_moves, show_opposite_moves); };
+        if (displayOnSiteEl)   displayOnSiteEl.onchange   = () => { displayMovesOnSite  = displayOnSiteEl.checked;   GM_setValue(DB.displayMovesOnSite,  displayMovesOnSite);  };
+        if (enableUserLogEl)   enableUserLogEl.onchange   = () => { enableUserLog       = enableUserLogEl.checked;   GM_setValue(DB.enableUserLog,       enableUserLog);       };
+        if (enableEngineLogEl) enableEngineLogEl.onchange = () => { enableEngineLog     = enableEngineLogEl.checked; GM_setValue(DB.enableEngineLog,     enableEngineLog);     };
 
         if (reloadEngineEl) reloadEngineEl.onchange = () => {
             reload_engine = reloadEngineEl.checked;
@@ -1185,7 +1385,7 @@ function fixDepthMoveTimeInput(depthR, depthN, mtR, mtN, eloElem) {
     setEloDescription(eloElem);
 }
 
-// ─── Database init ────────────────────────────────────────────────────────────
+// Database
 async function initializeDatabase(callback) {
     const defaults = {
         nightMode: false, engineMode: 0, engineIndex: 0,
@@ -1199,36 +1399,33 @@ async function initializeDatabase(callback) {
 
     const stored = await GM_getValue(DB.nightMode);
 
-    // Write defaults on first run
     if (stored === undefined) {
         for (const [k, v] of Object.entries(defaults)) await GM_setValue(DB[k], v);
     }
 
-    // Always read back from storage (handles both first-run and subsequent)
-    nightMode          = await GM_getValue(DB.nightMode);
-    engineMode         = await GM_getValue(DB.engineMode);
-    engineIndex        = await GM_getValue(DB.engineIndex);
-    reload_engine      = await GM_getValue(DB.reload_engine);
-    reload_every       = await GM_getValue(DB.reload_every);
-    enableUserLog      = await GM_getValue(DB.enableUserLog);
-    enableEngineLog    = await GM_getValue(DB.enableEngineLog);
-    displayMovesOnSite = await GM_getValue(DB.displayMovesOnSite);
-    show_opposite_moves= await GM_getValue(DB.show_opposite_moves);
-    use_book_moves     = await GM_getValue(DB.use_book_moves);
-    node_engine_url    = await GM_getValue(DB.node_engine_url);
-    node_engine_name   = await GM_getValue(DB.node_engine_name);
-    current_depth      = await GM_getValue(DB.current_depth);
-    current_movetime   = await GM_getValue(DB.current_movetime);
-    max_best_moves     = await GM_getValue(DB.max_best_moves);
+    nightMode           = await GM_getValue(DB.nightMode);
+    engineMode          = await GM_getValue(DB.engineMode);
+    engineIndex         = await GM_getValue(DB.engineIndex);
+    reload_engine       = await GM_getValue(DB.reload_engine);
+    reload_every        = await GM_getValue(DB.reload_every);
+    enableUserLog       = await GM_getValue(DB.enableUserLog);
+    enableEngineLog     = await GM_getValue(DB.enableEngineLog);
+    displayMovesOnSite  = await GM_getValue(DB.displayMovesOnSite);
+    show_opposite_moves = await GM_getValue(DB.show_opposite_moves);
+    use_book_moves      = await GM_getValue(DB.use_book_moves);
+    node_engine_url     = await GM_getValue(DB.node_engine_url);
+    node_engine_name    = await GM_getValue(DB.node_engine_name);
+    current_depth       = await GM_getValue(DB.current_depth);
+    current_movetime    = await GM_getValue(DB.current_movetime);
+    max_best_moves      = await GM_getValue(DB.max_best_moves);
 
     callback();
 }
 
-// ─── Entry point ──────────────────────────────────────────────────────────────
+// Entry point
 function initialize() {
     Interface  = new InterfaceUtils();
     const LozzaUtils = new LozzaUtility();
-    // expose LozzaUtils globally so getBestMoves can use it
     window._LozzaUtils = LozzaUtils;
     turn = Interface.getBoardOrientation();
 
@@ -1242,8 +1439,6 @@ function initialize() {
     );
 }
 
-// Patch LozzaUtils reference to use the instance created in initialize()
-// (avoids a separate global declaration)
 Object.defineProperty(window, 'LozzaUtils', {
     get: () => window._LozzaUtils,
     configurable: true
@@ -1262,9 +1457,8 @@ const waitForChessBoard = setInterval(() => {
     }
 
     if (CURRENT_SITE === LICHESS_ORG) {
-        boardElem      = document.querySelector('.cg-wrap');
-        if (!boardElem) boardElem = document.querySelector('[data-board]');
-        firstPieceElem = boardElem?.querySelector('piece') ?? boardElem?.querySelector('.cg-piece') ?? boardElem?.querySelector('[data-role]') ?? null;
+        boardElem      = document.querySelector('cg-board') || document.querySelector('.cg-wrap') || document.querySelector('[data-board]');
+        firstPieceElem = boardElem?.querySelector('piece:not(.ghost)') ?? boardElem?.querySelector('.cg-piece') ?? boardElem?.querySelector('[data-role]') ?? null;
     } else if (CURRENT_SITE === CHESS_COM) {
         boardElem      = document.querySelector('.board');
         firstPieceElem = document.querySelector('.piece');
