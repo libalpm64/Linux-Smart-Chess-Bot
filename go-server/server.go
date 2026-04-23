@@ -13,11 +13,18 @@ import (
 )
 
 type EngineResponse struct {
-	Fen    string `json:"fen"`
-	Move   string `json:"move"`
-	Turn   string `json:"turn"`
-	Depth  int    `json:"depth"`
-	Engine string `json:"engine"`
+	Fen    string     `json:"fen"`
+	Lines  []MoveLine `json:"lines"`
+	Turn   string     `json:"turn"`
+	Depth  int        `json:"depth"`
+	Engine string     `json:"engine"`
+}
+
+type MoveLine struct {
+	Moves     []string `json:"moves"`
+	Score     int      `json:"score"`
+	ScoreType string   `json:"scoreType"`
+	Depth     int      `json:"depth"`
 }
 
 func loadEngines() (map[string]string, string) {
@@ -39,49 +46,133 @@ func loadEngines() (map[string]string, string) {
 
 var engines, defaultEngine = loadEngines()
 
-func executeEngine(fen, depth, engineName string) (string, error) {
+func executeEngine(fen, depth, engineName string) ([]MoveLine, error) {
 	enginePath, ok := engines[engineName]
 	if !ok {
 		enginePath, ok = engines[defaultEngine]
 		if !ok {
-			return "", fmt.Errorf("no engines found")
+			return nil, fmt.Errorf("no engines found")
 		}
 	}
 
 	cmd := exec.Command(enginePath)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if err := cmd.Start(); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	fmt.Fprintf(stdin, "uci\n")
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "uciok") {
+			break
+		}
+	}
+
+	fmt.Fprintf(stdin, "setoption name MultiPV value %d\n", 5)
+	fmt.Fprintf(stdin, "ucinewgame\n")
+	fmt.Fprintf(stdin, "isready\n")
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "readyok") {
+			break
+		}
+	}
 	fmt.Fprintf(stdin, "position fen %s\n", fen)
 	fmt.Fprintf(stdin, "go depth %s\n", depth)
 	stdin.Close()
 
-	scanner := bufio.NewScanner(stdout)
-	var bestMove string
+	var lines []MoveLine
+	pvLines := make(map[int]MoveLine)
+	var maxDepth int
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "bestmove ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				bestMove = parts[1]
-				break
+			break
+		}
+		if strings.HasPrefix(line, "info depth ") {
+			fields := strings.Fields(line)
+			var score int
+			var scoreType string = "cp"
+			var pv []string
+			var depth int
+			var pvNum int = 1
+			hasMultiPV := false
+
+			for i, field := range fields {
+				if field == "depth" && i+1 < len(fields) {
+					depth, _ = strconv.Atoi(fields[i+1])
+				}
+				if field == "multipv" && i+1 < len(fields) {
+					pvNum, _ = strconv.Atoi(fields[i+1])
+					hasMultiPV = true
+				}
+				if field == "score" && i+2 < len(fields) {
+					next := fields[i+1]
+					if next == "cp" {
+						score, _ = strconv.Atoi(fields[i+2])
+						scoreType = "cp"
+					} else if next == "mate" {
+						score, _ = strconv.Atoi(fields[i+2])
+						scoreType = "mate"
+					}
+				}
+				if field == "pv" {
+					pv = fields[i+1:]
+					break
+				}
+			}
+
+			if len(pv) > 0 {
+				if hasMultiPV {
+					pvLines[pvNum] = MoveLine{
+						Moves:     pv,
+						Score:     score,
+						ScoreType: scoreType,
+						Depth:     depth,
+					}
+				} else {
+					if depth > maxDepth {
+						maxDepth = depth
+						pvLines[1] = MoveLine{
+							Moves:     pv,
+							Score:     score,
+							ScoreType: scoreType,
+							Depth:     depth,
+						}
+					}
+				}
 			}
 		}
 	}
 
+	if len(pvLines) == 0 {
+		return nil, fmt.Errorf("no moves found")
+	}
+
+	for i := 1; i <= len(pvLines); i++ {
+		if line, ok := pvLines[i]; ok {
+			lines = append(lines, line)
+		}
+	}
+
 	cmd.Process.Kill()
-	return bestMove, nil
+
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("no moves found")
+	}
+
+	return lines, nil
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +189,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		engineName = defaultEngine
 	}
 
-	move, err := executeEngine(fen, depth, engineName)
+	lines, err := executeEngine(fen, depth, engineName)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -107,7 +198,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	intDepth, _ := strconv.Atoi(depth)
 	resp := EngineResponse{
 		Fen:    fen,
-		Move:   move,
+		Lines:  lines,
 		Turn:   "w",
 		Depth:  intDepth,
 		Engine: engineName,
