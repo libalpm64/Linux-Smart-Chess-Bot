@@ -49,36 +49,34 @@ func executeEngine(fen, depth, engineName string) (string, error) {
 	}
 
 	cmd := exec.Command(enginePath)
-	stdin, _ := cmd.StdinPipe()
-	stdout, _ := cmd.StdoutPipe()
-	cmd.Stderr = nil
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return "", err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
 
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
 
-	writer := bufio.NewWriter(stdin)
-	scanner := bufio.NewScanner(stdout)
-
-	fmt.Fprintf(writer, "uci\n")
-	fmt.Fprintf(writer, "position fen %s\n", fen)
-	fmt.Fprintf(writer, "go depth %s\n", depth)
-	fmt.Fprintf(writer, "quit\n")
-	writer.Flush()
+	fmt.Fprintf(stdin, "uci\n")
+	fmt.Fprintf(stdin, "position fen %s\n", fen)
+	fmt.Fprintf(stdin, "go depth %s\n", depth)
 	stdin.Close()
 
+	scanner := bufio.NewScanner(stdout)
 	var bestMove string
 	for scanner.Scan() {
 		line := scanner.Text()
-		fields := strings.Fields(line)
-		for i, f := range fields {
-			if f == "bestmove" && i+1 < len(fields) {
-				bestMove = fields[i+1]
+		if strings.HasPrefix(line, "bestmove ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				bestMove = parts[1]
 				break
 			}
-		}
-		if bestMove != "" {
-			break
 		}
 	}
 
@@ -93,7 +91,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	depth := r.URL.Query().Get("depth")
 	if depth == "" {
-		depth = "1"
+		depth = "10"
 	}
 	engineName := r.URL.Query().Get("engine")
 	if engineName == "" {

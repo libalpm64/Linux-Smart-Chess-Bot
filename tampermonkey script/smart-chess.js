@@ -24,6 +24,7 @@
 // ==/UserScript==
 
 const repositoryRawURL  = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main';
+const engineBase = `${repositoryRawURL}/engines`;
 const LICHESS_API       = 'https://lichess.org/api/cloud-eval';
 const CHESS_COM         = 0;
 const LICHESS_ORG       = 1;
@@ -40,9 +41,9 @@ const MAX_LOGS          = 50;
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
 const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js'];
-const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM'];
-const ENGINE_WASM        = 4;
-const node_engine_id    = 5;
+const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM', 'go_server'];
+const GO_ENGINE_NAME = ENGINE_NAMES[ENGINE_NAMES.length - 1];
+const JS_ENGINE_COUNT = ENGINE_NAMES.length - 1;
 
 const best_move_color                = [0,   0,   250, 0.5];
 const opposite_best_move_color       = [250, 0,   0,   0.5];
@@ -52,7 +53,7 @@ const defaultFromSquareStyle = 'border:4px solid rgb(0 0 0/50%);';
 const defaultToSquareStyle   = 'border:4px dashed rgb(0 0 0/50%);';
 
 const DB = {
-    nightMode:'nightMode', engineMode:'engineMode', engineIndex:'engineIndex',
+    nightMode:'nightMode', engineMode:'engineMode', engineName:'engineName',
     reload_every:'reload_every', reload_engine:'reload_engine',
     enableUserLog:'enableUserLog', enableEngineLog:'enableEngineLog',
     displayMovesOnSite:'displayMovesOnSite', show_opposite_moves:'show_opposite_moves',
@@ -63,7 +64,7 @@ const DB = {
 
 let nightMode           = false;
 let engineMode          = 0;
-let engineIndex         = 0;
+let engineName         = ENGINE_NAMES[0];
 let reload_every        = 10;
 let reload_engine       = false;
 let enableUserLog       = true;
@@ -89,7 +90,7 @@ let firstPieceElem      = null;
 let forcedBestMove      = false;
 let engine              = null;
 let engineObjectURL     = null;
-let loadedEngineIndex   = -1;
+let loadedEngineName  = null;
 
 let chessBoardElem      = null;
 let turn                = '-';
@@ -151,6 +152,22 @@ function chessCoordinatesToIndex(coord) {
     const x = coord.charCodeAt(0) - 97;
     const y = Number(coord.slice(1)) - 1;
     return [x, y];
+}
+
+function getLichessTurnFromMoveList() {
+    // Live game move list (l4x kwdb elements)
+    const liveMoves = document.querySelectorAll('l4x kwdb');
+    if (liveMoves.length > 0) return liveMoves.length % 2 === 0 ? 'w' : 'b';
+
+    // Puzzles (.tview2 move elements), Do not count indexs.
+    const puzzleMoves = document.querySelectorAll('.tview2 move');
+    if (puzzleMoves.length > 0) return puzzleMoves.length % 2 === 0 ? 'w' : 'b';
+
+    // Fallback (If all fails)
+    const otherMoves = document.querySelectorAll('.puzzle__moves move, .move-list move');
+    if (otherMoves.length > 0) return otherMoves.length % 2 === 0 ? 'w' : 'b';
+
+    return null;
 }
 
 function FenUtils() {
@@ -258,34 +275,26 @@ function FenUtils() {
     };
 
     this.getBoardOrientation = () => {
+        if (CURRENT_SITE === CHESS_COM) return document.querySelector('.board.flipped') ? 'b' : 'w';
         if (CURRENT_SITE === LICHESS_ORG) {
-            return document.querySelector('.cg-wrap')?.classList?.contains('orientation-black') ? 'b' : 'w';
+            const cgWrap = document.querySelector('.cg-wrap');
+            // orientation-black means the board is flipped = you are playing black
+            // orientation-white means the board is normal = you are playing white
+            return cgWrap?.classList.contains('orientation-black') ? 'b' : 'w';
         }
-        return document.querySelector('.board.flipped') ? 'b' : 'w';
+        return 'w';
     };
-
     this.getTurn = () => {
         if (CURRENT_SITE === LICHESS_ORG) {
             const fenInput = document.querySelector('.fen-pnl input, .analyse__controls input.fen, input[name="fen"]');
-            
             if (fenInput && fenInput.value) {
                 const parts = fenInput.value.trim().split(/\s+/);
                 if (parts.length >= 2) {
                     const turnChar = parts[1].toLowerCase();
-                    if (turnChar === 'w' || turnChar === 'b') {
-                        return turnChar;
-                    }
+                    if (turnChar === 'w' || turnChar === 'b') return turnChar;
                 }
             }
-
-            const boardWrap = document.querySelector('.cg-wrap');
-            const isFlipped = boardWrap?.classList?.contains('orientation-black');
-            const myColor = isFlipped ? 'b' : 'w';
-            const allMoves = document.querySelectorAll('.puzzle__moves move, .move-list move');
-            if (allMoves.length > 0) {
-                return (allMoves.length % 2 === 0) ? 'w' : 'b';
-            }
-            return myColor;
+            return getLichessTurnFromMoveList();
         }
         return typeof turn !== 'undefined' ? turn : 'w';
     };
@@ -338,7 +347,7 @@ function InterfaceUtils() {
                     activeGuiMoveHighlights.push(el);
                 });
             }
-            if (displayMovesOnSite || (!isPlayerTurn && show_opposite_moves))
+            if (displayMovesOnSite && isPlayerTurn)
                 markMoveToSite(from, to, color);
         },
 
@@ -678,27 +687,36 @@ function sendBestMove() {
         return;
     }
 
-    // Check turn first
-    if (!isPlayerTurn && !show_opposite_moves) return;
+    const fenUtil    = new FenUtils();
+    const actualTurn = fenUtil.getTurn();
 
-    const fen = new FenUtils().getFen();
+    if (actualTurn === null) {
+        Interface.log('Turn unknown, skipping.');
+        return;
+    }
 
-    // Check for empty boards and skip engine requests if empty.
-    if (!fen || fen.startsWith('8/8/8/8/8/8/8/8')) {
+    if (actualTurn !== playerColor) {
+        Interface.log(`Not your turn (turn=${actualTurn}, you=${playerColor}), skipping.`);
+        return;
+    }
+
+    isPlayerTurn = true;
+
+    const currentFen = fenUtil.getFen();
+    if (!currentFen || currentFen.startsWith('8/8/8/8/8/8/8/8')) {
         Interface.log('FEN appears empty, skipping engine request.');
         return;
     }
 
     possible_moves = [];
     lastBestMoveID++;
-    const req = { id: lastBestMoveID, fen };
-    
+    const req = { id: lastBestMoveID, fen: currentFen };
+
     reloadChessEngine(false, () => {
-        Interface.log('Sending best move request to engine...');
+        Interface.log(`Your turn (${playerColor}). Sending best-move request…`);
         use_book_moves ? getBookMoves(req) : getBestMoves(req);
     });
 }
-
 
 function updateBestMove(mutationArr) {
     const fenUtil = new FenUtils();
@@ -768,38 +786,52 @@ function getNodeBestMoves(request) {
         + `&turn=${encodeURIComponent(last_turn || turn)}&engine=${encodeURIComponent(node_engine_name)}`;
     GM_xmlhttpRequest({
         method: 'GET', url,
-        headers: { 'Content-Type': 'application/json' },
         onload: res => {
+            console.log('Response status:', res.status, 'response:', res.response);
             if (lastBestMoveID !== request.id) return;
-            if (res.response === 'false' || !res.ok) {
+            if (res.status !== 200) {
                 resetBestMoveBtn();
-                return Interface.log('check node/go server logs !!');
+                Interface.log('Server error: ' + res.status);
+                return;
+            }
+            if (!res.response || res.response === 'false') {
+                resetBestMoveBtn();
+                Interface.log('Server returned empty');
+                return;
             }
             const data = safeParseJSON(res.response);
             if (!data) {
                 resetBestMoveBtn();
-                Interface.log(`Server returned non-JSON: ${(res.response || '').slice(0, 80)}`);
+                Interface.log('Invalid JSON: ' + (res.response || '').slice(0, 50));
                 return;
             }
-            const { depth, movetime, score, move } = data;
+            console.log('Parsed data:', data);
+            const { depth, movetime, move } = data;
+            console.log('Server response:', data);
             if (!move || move.length < 4) {
                 resetBestMoveBtn();
                 Interface.log('Server returned invalid move.');
                 return;
             }
+            if (move === 'e2e4' && request.fen.includes('8/p7/')) {
+                Interface.log('Skipping bad FEN response');
+                return;
+            }
+            Interface.log(`Got move: ${move}, depth: ${depth}, engine: ${node_engine_name}`);
             Interface.updateBestMoveProgress(
-                engineMode === DEPTH_MODE ? `Depth: ${depth}` : `Move time: ${movetime} ms`);
-            moveResult(move.slice(0,2), move.slice(2,4), score, true);
+                engineMode === DEPTH_MODE ? `Depth: ${depth}` : `Move time: ${movetime || 500} ms`);
+            moveResult(move.slice(0,2), move.slice(2,4), depth || 10, true);
         },
-        onerror: () => {
+        onerror: res => {
+            console.log('Request failed:', res);
             resetBestMoveBtn();
-            Interface.log('make sure the server is running !!');
+            Interface.log('Request failed: ' + JSON.stringify(res));
         }
     });
 }
 
 function getBestMoves(request) {
-    if (engineIndex === node_engine_id)
+    if (engineName === GO_ENGINE_NAME)
         return getNodeBestMoves(request);
 
     if (!engine) return;
@@ -827,63 +859,71 @@ function getBestMoves(request) {
     };
 }
 
-function loadChessEngine(callback) {
-    const engineName = ENGINE_RESOURCES[engineIndex];
-    const engineBase = `${repositoryRawURL}/engines`;
+function loadChessEngine(forced = false, callback) {
+    if (engineName === GO_ENGINE_NAME) {
+        Interface.log('Using Go server: ' + engineName);
+        loadedEngineName = engineName;
+        callback();
+        return;
+    }
+    
+    const engineIndex = ENGINE_NAMES.indexOf(engineName);
+    const needsReload = forced || loadedEngineName !== engineName || (reload_engine && reload_count >= reload_every);
+    if (!needsReload) {
+        reload_count++;
+        callback();
+        return;
+    }
 
-    if (engineIndex === ENGINE_WASM) {
-        const base   = repositoryRawURL + '/engines/js';
-        const jsFile = 'stockfish-18-asm.js';
+    if (needsReload) {
+        reload_count = 1;
+        Interface.log('Reloading chess engine: ' + engineName);
+        engine?.terminate();
+    }
 
-        Interface.log('SF18-ASM loading...');
-
-        fetch(base + '/' + jsFile).then(function(r) {
-            return r.text();
-        }).then(function(src) {
-            engineObjectURL = URL.createObjectURL(
-                new Blob([src], { type: 'application/javascript' }));
-            loadedEngineIndex = ENGINE_WASM;
+    if (engineName === ENGINE_NAMES[JS_ENGINE_COUNT]) {
+        fetch(`${engineBase}/wasm/${ENGINE_RESOURCES[JS_ENGINE_COUNT]}`).then(r => r.text()).then(src => {
+            engineObjectURL = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+            loadedEngineName = engineName;
             engine = new Worker(engineObjectURL);
             engine.postMessage('ucinewgame');
-            Interface.log('Loaded: ' + ENGINE_NAMES[ENGINE_WASM]);
-        }).catch(function(e) {
+            Interface.log('Loaded: ' + ENGINE_NAMES[JS_ENGINE_COUNT]);
+        }).catch(e => {
             Interface.log('SF ASM error: ' + e);
         });
-
         return callback();
     }
 
-    if (engineName) {
-        fetch(`${engineBase}/js/${engineName}`).then(r => r.text()).then(src => {
-            engineObjectURL = URL.createObjectURL(
-                new Blob([src], { type: 'application/javascript' }));
-            loadedEngineIndex = engineIndex;
-            engine = new Worker(engineObjectURL);
-            engine.postMessage('ucinewgame');
-            Interface.log(`Loaded engine: ${ENGINE_NAMES[engineIndex]}`);
-        }).catch(e => {
-            Interface.log(`Failed to load engine: ${e}`);
-        });
-    } else if (engineObjectURL && loadedEngineIndex === engineIndex) {
+    if (engineIndex < 0) {
+        Interface.log('Unknown engine: ' + engineName);
+        callback();
+        return;
+    }
+
+    const resourceName = ENGINE_RESOURCES[engineIndex];
+    fetch(`${engineBase}/js/${resourceName}`).then(r => r.text()).then(src => {
+        engineObjectURL = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+        loadedEngineName = engineName;
         engine = new Worker(engineObjectURL);
         engine.postMessage('ucinewgame');
-    }
+        Interface.log(`Loaded engine: ${engineName}`);
+    }).catch(e => {
+        Interface.log(`Failed to load ${engineName}: ` + e);
+    });
     callback();
 }
 
 function reloadChessEngine(forced, callback) {
-    const needsReload = forced || loadedEngineIndex !== engineIndex || (reload_engine && reload_count >= reload_every);
-    if (engineIndex === node_engine_id && !needsReload) return callback();
-
-    if (needsReload) {
-        reload_count = 1;
-        Interface.log('Reloading chess engine...');
-        engine?.terminate();
-        loadChessEngine(callback);
-    } else {
+    const needsReload = forced || loadedEngineName !== engineName || (reload_engine && reload_count >= reload_every);
+    if (!needsReload) {
         reload_count++;
         callback();
+        return;
     }
+    reload_count = 1;
+    Interface.log('Reloading: ' + engineName);
+    engine?.terminate();
+    loadChessEngine(forced, callback);
 }
 
 function updatePlayerColor(callback) {
@@ -894,52 +934,95 @@ function updatePlayerColor(callback) {
 }
 
 function observeNewMoves() {
-    // Initial check
-    updateBestMove();
-
-    let debounceTimer;
-    const handleBoardChange = () => {
-        clearTimeout(debounceTimer);
-        // 100-200ms debounce. If we trigger too early, we catch the board 
-        // in an intermediate state where the FEN hasn't fully settled or the turn is ambiguous.
-        debounceTimer = setTimeout(() => {
-            updateBestMove();
-        }, 250); 
-    };
-    // look at the FEN input
-    const fenInput = document.querySelector('.fen-pnl input, .analyse__controls input.fen, input[name="fen"]');
-    if (fenInput) {
-        new MutationObserver(handleBoardChange).observe(fenInput, { 
-            attributes: true, 
-            attributeFilter: ['value'] 
-        });
-        fenInput.addEventListener('input', handleBoardChange);
-        fenInput.addEventListener('change', handleBoardChange);
+    const fenUtil = new FenUtils();
+ 
+    // Returns 'w' or 'b' for whose clock is currently "running"
+    // by checking which rclock element has the "running" class.
+    function getLichessActiveColor() {
+        if (document.querySelector('.rclock-white.running, .rclock-white .bar.active, .rclock-bottom.running'))
+            return 'w';
+        if (document.querySelector('.rclock-black.running, .rclock-black .bar.active, .rclock-top.running'))
+            return 'b';
+        // Fallback: read from FEN
+        return fenUtil.getFen().split(' ')[1] || 'w';
     }
-
-    // look at board container
+ 
+    updateBoard(false);
+    setTimeout(() => sendBestMove(), 300);
+ 
+    let debounceTimer = null;
+    const onBoardChange = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            const newFen = fenUtil.getFen();
+            // return if nothing actually changed
+            if (newFen === lastFen) return;
+            lastFen = newFen;
+ 
+            const fenTurn = newFen.split(' ')[1]; // 'w' or 'b'
+ 
+            updateBoard(false);
+ 
+            if (fenTurn === playerColor) {
+                removeSiteMoveMarkings();
+                Interface.boardUtils.removeBestMarkings();
+                sendBestMove();
+            } else {
+                removeSiteMoveMarkings();
+                Interface.boardUtils.removeBestMarkings();
+                Interface.log(`Opponent's turn (${fenTurn}), cleared highlights.`);
+            }
+        }, 120);
+    };
+ 
     const cgWrap = document.querySelector('.cg-wrap') || chessBoardElem;
     if (cgWrap) {
-        new MutationObserver((mutations) => {
-            const relevant = mutations.some(m => {
-                if (m.type === 'attributes') {
-                    return m.attributeName === 'class' && 
-                           (m.target.classList.contains('last-move') || 
-                            m.target.tagName === 'PIECE');
-                }
-                return false;
-            });
-            
-            if (relevant) handleBoardChange();
-        }).observe(cgWrap, { 
-            childList: true, 
-            subtree: true, 
-            attributes: true,
-            attributeFilter: ['class', 'style']
+        new MutationObserver(onBoardChange).observe(cgWrap, {
+            childList:       true,
+            subtree:         true,
+            attributes:      true,
+            attributeFilter: ['class', 'style'],
         });
     }
-
-    Interface.log('Robust observers attached (250ms debounce).');
+ 
+    const fenInput = document.querySelector(
+        '.fen-pnl input, .analyse__controls input.fen, input[name="fen"]'
+    );
+    if (fenInput) {
+        new MutationObserver(onBoardChange).observe(fenInput, {
+            attributes:      true,
+            attributeFilter: ['value'],
+        });
+        fenInput.addEventListener('input',  onBoardChange);
+        fenInput.addEventListener('change', onBoardChange);
+    }
+ 
+    if (CURRENT_SITE === LICHESS_ORG) {
+        let lastActiveColor = null;
+ 
+        setInterval(() => {
+            const activeColor = getLichessActiveColor();
+            if (activeColor === lastActiveColor) return;
+            lastActiveColor = activeColor;
+ 
+            Interface.log(`Clock switched to ${activeColor} (you=${playerColor})`);
+ 
+            if (activeColor === playerColor) {
+                removeSiteMoveMarkings();
+                Interface.boardUtils.removeBestMarkings();
+ 
+                setTimeout(() => {
+                    updateBoard(false);
+                    sendBestMove();
+                }, 150);
+            } else {
+                removeSiteMoveMarkings();
+                Interface.boardUtils.removeBestMarkings();
+            }
+        }, 150);
+    }
+ 
+    Interface.log('observeNewMoves: observers attached (auto-move enabled).');
 }
 
 function applyNightMode() {
@@ -1007,7 +1090,6 @@ label.night,input.night{color:#fff;background:#525252}
 </style>`;
 
 const engineOptionsHtml = ENGINE_NAMES.map(n => `<option>${n}</option>`).join('')
-    + `<option>Node / Go Server</option>`;
 
 function addGuiPages() {
     if (guiPagesAdded) return;
@@ -1071,7 +1153,7 @@ function addGuiPages() {
             <input type="checkbox" id="use-book-moves" ${use_book_moves ? 'checked' : ''}>
             <span class="checkmark"></span>
           </label>
-          <div id="reload-engine-div" style="display:${engineIndex === node_engine_id ? 'none' : 'block'}">
+          <div id="reload-engine-div" style="display:${engineName === GO_ENGINE_NAME ? 'none' : 'block'}">
             <label class="container">Enable Engine Reload
               <input type="checkbox" id="reload-engine" ${reload_engine ? 'checked' : ''}>
               <span class="checkmark"></span>
@@ -1083,7 +1165,7 @@ function addGuiPages() {
               </label>
             </div>
           </div>
-          <div id="node-engine-div" style="display:${engineIndex === node_engine_id ? 'block' : 'none'}">
+          <div id="node-engine-div" style="display:${engineName === GO_ENGINE_NAME ? 'block' : 'none'}">
             <label>Server URL:<br><input type="text" id="engine-url" value="${node_engine_url}" style="width:100%"></label>
             <div class="space"></div>
             <label>Engine Name:<br><input type="text" id="engine-name" value="${node_engine_name}" style="width:100%"></label>
@@ -1117,7 +1199,7 @@ function addGuiPages() {
         <div class="card-body">
           <h4 class="card-title">Visual</h4>
           <h6 class="alert">⚠ Warning ⚠: Displaying moves on-site is detectable — use with caution!</h6>
-          <div id="max-moves-div" style="display:${engineIndex === node_engine_id ? 'none' : 'block'}">
+          <div id="max-moves-div" style="display:${engineName === GO_ENGINE_NAME ? 'none' : 'block'}">
             <label>Max Best Moves:
               <input type="number" min="1" max="4" id="max-moves" value="${max_best_moves}">
             </label>
@@ -1260,7 +1342,8 @@ function openGUI() {
         const resetEl            = q('#reset-settings');
 
         fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
-        if (engineEl)     engineEl.selectedIndex     = engineIndex;
+        const selectedEngine = ENGINE_NAMES.indexOf(engineName);
+        if (engineEl) engineEl.selectedIndex = selectedEngine >= 0 ? selectedEngine : 0;
         if (engineModeEl) engineModeEl.selectedIndex = engineMode;
         applyNightMode();
 
@@ -1281,7 +1364,7 @@ function openGUI() {
         }
 
         if (CURRENT_SITE === LICHESS_ORG) {
-            if (engineEl) engineEl.selectedIndex = ENGINE_WASM;
+            if (engineEl) engineEl.selectedIndex = JS_ENGINE_COUNT;
             if (maxMovesDivEl)     maxMovesDivEl.style.display     = 'none';
             if (engineNameDivEl)   engineNameDivEl.style.display   = 'none';
             if (reloadEngineDivEl) reloadEngineDivEl.style.display = 'block';
@@ -1319,13 +1402,13 @@ function openGUI() {
         };
 
         if (engineEl) engineEl.onchange = () => {
-            engineIndex = engineEl.selectedIndex;
-            GM_setValue(DB.engineIndex, engineIndex);
-            const isNode = engineIndex === node_engine_id;
-            if (reloadEngineDivEl)  reloadEngineDivEl.style.display  = isNode ? 'none' : 'block';
-            if (engineNameDivEl)    engineNameDivEl.style.display    = isNode ? 'block' : 'none';
-            if (maxMovesDivEl)      maxMovesDivEl.style.display      = isNode ? 'none' : 'block';
-            if (engineObjectURL) { URL.revokeObjectURL(engineObjectURL); engineObjectURL = null; }
+            engineName = engineEl.value;
+            GM_setValue(DB.engineName, engineName);
+            const isNode = engineName === GO_ENGINE_NAME;
+            if (reloadEngineDivEl) reloadEngineDivEl.style.display = isNode ? 'none' : 'block';
+            if (engineNameDivEl) engineNameDivEl.style.display = isNode ? 'block' : 'none';
+            if (maxMovesDivEl) maxMovesDivEl.style.display = isNode ? 'none' : 'block';
+            if (engineObjectURL) { URL.revokeObjectURL(engineObjectURL); engineObjectURL = null; loadedEngineName = null; }
             reloadChessEngine(true, () => {
                 Interface.boardUtils.removeBestMarkings();
                 removeSiteMoveMarkings();
@@ -1388,7 +1471,7 @@ function fixDepthMoveTimeInput(depthR, depthN, mtR, mtN, eloElem) {
 // Database
 async function initializeDatabase(callback) {
     const defaults = {
-        nightMode: false, engineMode: 0, engineIndex: 0,
+        nightMode: false, engineMode: 0, engineName: ENGINE_NAMES[0],
         reload_engine: false, reload_every: 10,
         enableUserLog: true, enableEngineLog: true,
         displayMovesOnSite: false, show_opposite_moves: false, use_book_moves: false,
@@ -1405,7 +1488,7 @@ async function initializeDatabase(callback) {
 
     nightMode           = await GM_getValue(DB.nightMode);
     engineMode          = await GM_getValue(DB.engineMode);
-    engineIndex         = await GM_getValue(DB.engineIndex);
+    engineName         = await GM_getValue(DB.engineName) || ENGINE_NAMES[0];
     reload_engine       = await GM_getValue(DB.reload_engine);
     reload_every        = await GM_getValue(DB.reload_every);
     enableUserLog       = await GM_getValue(DB.enableUserLog);
@@ -1413,8 +1496,8 @@ async function initializeDatabase(callback) {
     displayMovesOnSite  = await GM_getValue(DB.displayMovesOnSite);
     show_opposite_moves = await GM_getValue(DB.show_opposite_moves);
     use_book_moves      = await GM_getValue(DB.use_book_moves);
-    node_engine_url     = await GM_getValue(DB.node_engine_url);
-    node_engine_name    = await GM_getValue(DB.node_engine_name);
+    node_engine_url     = await GM_getValue(DB.node_engine_url) || 'http://localhost:5000';
+    node_engine_name    = await GM_getValue(DB.node_engine_name) || 'komodo-201-64';
     current_depth       = await GM_getValue(DB.current_depth);
     current_movetime    = await GM_getValue(DB.current_movetime);
     max_best_moves      = await GM_getValue(DB.max_best_moves);
@@ -1425,12 +1508,15 @@ async function initializeDatabase(callback) {
 // Entry point
 function initialize() {
     Interface  = new InterfaceUtils();
+    const logger = (...args) => console.log('[SmartChess]', ...args);
+    if (!Interface.log) Interface.log = logger;
+    if (!Interface.log) Interface.log = (...args) => console.log('[SmartChess]', ...args);
     const LozzaUtils = new LozzaUtility();
     window._LozzaUtils = LozzaUtils;
     turn = Interface.getBoardOrientation();
 
     initializeDatabase(() =>
-        loadChessEngine(() =>
+        loadChessEngine(false, () =>
             updatePlayerColor(() => {
                 addGuiPages();
                 openGUI();
