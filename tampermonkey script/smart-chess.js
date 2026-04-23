@@ -278,8 +278,6 @@ function FenUtils() {
         if (CURRENT_SITE === CHESS_COM) return document.querySelector('.board.flipped') ? 'b' : 'w';
         if (CURRENT_SITE === LICHESS_ORG) {
             const cgWrap = document.querySelector('.cg-wrap');
-            // orientation-black means the board is flipped = you are playing black
-            // orientation-white means the board is normal = you are playing white
             return cgWrap?.classList.contains('orientation-black') ? 'b' : 'w';
         }
         return 'w';
@@ -296,6 +294,7 @@ function FenUtils() {
             }
             return getLichessTurnFromMoveList();
         }
+        // Chess.com: use the global turn variable set by piece movement tracking
         return typeof turn !== 'undefined' ? turn : 'w';
     };
 
@@ -392,8 +391,11 @@ function InterfaceUtils() {
     this.log       = str => { if (enableUserLog)   appendLog('#userscript-log-container', str, userscriptLogNum++); };
 
     this.getBoardOrientation = () => {
-        if (CURRENT_SITE === CHESS_COM)   return document.querySelector('.board.flipped') ? 'b' : 'w';
-        if (CURRENT_SITE === LICHESS_ORG) return document.querySelector('.orientation-white') ? 'w' : 'b';
+        if (CURRENT_SITE === CHESS_COM) return document.querySelector('.board.flipped') ? 'b' : 'w';
+        if (CURRENT_SITE === LICHESS_ORG) {
+            const cgWrap = document.querySelector('.cg-wrap');
+            return cgWrap?.classList.contains('orientation-black') ? 'b' : 'w';
+        }
         return 'w';
     };
 
