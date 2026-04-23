@@ -159,12 +159,12 @@ function getLichessTurnFromMoveList() {
     const liveMoves = document.querySelectorAll('l4x kwdb');
     if (liveMoves.length > 0) return liveMoves.length % 2 === 0 ? 'w' : 'b';
 
-    // Puzzles (.tview2 move elements), Do not count indexs.
-    const puzzleMoves = document.querySelectorAll('.tview2 move');
+    // Puzzles (.tview2 move elements), Do not count indexs / fail moves.
+    const puzzleMoves = document.querySelectorAll('.tview2 move:not(.fail)');
     if (puzzleMoves.length > 0) return puzzleMoves.length % 2 === 0 ? 'w' : 'b';
 
-    // Fallback (If all fails)
-    const otherMoves = document.querySelectorAll('.puzzle__moves move, .move-list move');
+    // Fallback (If all else fails)
+    const otherMoves = document.querySelectorAll('.puzzle__moves move:not(.fail), .move-list move:not(.fail)');
     if (otherMoves.length > 0) return otherMoves.length % 2 === 0 ? 'w' : 'b';
 
     return null;
@@ -680,14 +680,6 @@ function updateBoard(clear = true) {
 }
 
 function sendBestMove() {
-    const feedback = document.querySelector('.puzzle__feedback');
-    const isActiveFail = feedback?.classList.contains('fail') && 
-                         feedback?.querySelector('.instruction') !== null;
-    if (isActiveFail) {
-        Interface.log('Puzzle failed, waiting for next puzzle.');
-        clearBoard();
-        return;
-    }
     const fenUtil    = new FenUtils();
     const actualTurn = fenUtil.getTurn();
 
@@ -1034,7 +1026,24 @@ function observeNewMoves() {
             }
         }, 150);
     }
- 
+    // force re-eval on the position if the user plays the wrong move.
+    if (CURRENT_SITE === LICHESS_ORG) {
+        new MutationObserver(() => {
+            const feedback = document.querySelector('.puzzle__feedback');
+            if (feedback?.classList.contains('fail')) {
+                lastFen = null;
+                Interface.log('Wrong move detected, re-analyzing…');
+                setTimeout(() => {
+                    updateBoard(false);
+                    sendBestMove();
+                }, 150);
+            }
+        }).observe(document.body, {
+            subtree:         true,
+            attributes:      true,
+            attributeFilter: ['class'],
+        });
+    }
     Interface.log('observeNewMoves: observers attached (auto-move enabled).');
 }
 
