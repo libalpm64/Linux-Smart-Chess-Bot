@@ -33,11 +33,9 @@ if (nodeHost) {
         });
     });
 }
-// Browser WebWorker support - expose onmessage for Tampermonkey usage
 if (typeof window !== "undefined" || typeof importScripts !== "undefined") {
     onmessage = function(e) {
         var cmd = e.data;
-        // Wait for Module to be ready
         function sendCommand() {
             if (typeof Module !== "undefined" && Module.ccall) {
                 try {
@@ -46,7 +44,6 @@ if (typeof window !== "undefined" || typeof importScripts !== "undefined") {
                     console.error("Koivisto error:", err);
                 }
             } else {
-                // Retry after short delay if not ready
                 setTimeout(sendCommand, 10);
             }
         }
