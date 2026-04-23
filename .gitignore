@@ -1,0 +1,4 @@
+
+go-server/engines/bin/stockfish-18-avx2
+go-server/chess-server
+go-server/server.log
