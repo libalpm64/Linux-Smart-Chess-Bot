@@ -1377,7 +1377,6 @@ function openGUI() {
         }
 
         if (CURRENT_SITE === LICHESS_ORG) {
-            if (engineEl) engineEl.selectedIndex = JS_ENGINE_COUNT;
             if (maxMovesDivEl)     maxMovesDivEl.style.display     = 'none';
             if (engineNameDivEl)   engineNameDivEl.style.display   = 'none';
             if (reloadEngineDivEl) reloadEngineDivEl.style.display = 'block';
@@ -1404,14 +1403,18 @@ function openGUI() {
             if (forcedBestMove) return;
             bestMoveBtnEl.disabled = true;
             forcedBestMove = true;
-            updateBoard();
+            updateBoard(false);
             sendBestMove();
+            setTimeout(() => resetBestMoveBtn(), 5000);
         };
 
         if (engineModeEl) engineModeEl.onchange = () => {
             engineMode = engineModeEl.selectedIndex;
             GM_setValue(DB.engineMode, engineMode);
             fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
+            // Cancel any in flight request with old mode
+            lastBestMoveID++; 
+            Interface.log(`Engine mode: ${engineMode === DEPTH_MODE ? 'Depth' : 'Move time'}`);
         };
 
         if (engineEl) engineEl.onchange = () => {
@@ -1419,20 +1422,42 @@ function openGUI() {
             GM_setValue(DB.engineName, engineName);
             const isNode = engineName === GO_ENGINE_NAME;
             if (reloadEngineDivEl) reloadEngineDivEl.style.display = isNode ? 'none' : 'block';
-            if (engineNameDivEl) engineNameDivEl.style.display = isNode ? 'block' : 'none';
-            if (maxMovesDivEl) maxMovesDivEl.style.display = isNode ? 'none' : 'block';
-            if (engineObjectURL) { URL.revokeObjectURL(engineObjectURL); engineObjectURL = null; loadedEngineName = null; }
-            reloadChessEngine(true, () => {
+            if (engineNameDivEl)   engineNameDivEl.style.display   = isNode ? 'block' : 'none';
+            if (maxMovesDivEl)     maxMovesDivEl.style.display     = isNode ? 'none' : 'block';
+            if (engineObjectURL) {
+                URL.revokeObjectURL(engineObjectURL);
+                engineObjectURL  = null;
+                loadedEngineName = null;
+            }
+            engine?.terminate();
+            engine           = null;
+            loadedEngineName = null;
+            // Cancel in-flight requests.
+            lastBestMoveID++; 
+            loadChessEngine(true, () => {
                 Interface.boardUtils.removeBestMarkings();
                 removeSiteMoveMarkings();
                 Interface.boardUtils.updateBoardPower(0, 0);
+                Interface.log(`Engine switched to: ${engineName}`);
             });
         };
 
         const changePower = val => {
-            if (engineMode === DEPTH_MODE) { current_depth    = Number(val); GM_setValue(DB.current_depth,    current_depth);    }
-            else                           { current_movetime = Number(val); GM_setValue(DB.current_movetime, current_movetime); }
+            if (engineMode === DEPTH_MODE) {
+                current_depth    = Number(val);
+                GM_setValue(DB.current_depth, current_depth);
+                if (depthRangeEl)    depthRangeEl.value    = current_depth;
+                if (depthRangeNumEl) depthRangeNumEl.value = current_depth;
+            } else {
+                current_movetime = Number(val);
+                GM_setValue(DB.current_movetime, current_movetime);
+                if (moveTimeRangeEl)    moveTimeRangeEl.value    = current_movetime;
+                if (moveTimeRangeNumEl) moveTimeRangeNumEl.value = current_movetime;
+            }
             setEloDescription(eloEl);
+            // Force engine to use new (depth, movetime) on next request immediately
+            // Cancel any in flight request.
+            lastBestMoveID++; 
         };
 
         if (depthRangeEl)       depthRangeEl.onchange       = () => changePower(depthRangeEl.value);
