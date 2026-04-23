@@ -681,12 +681,13 @@ function updateBoard(clear = true) {
 
 function sendBestMove() {
     const feedback = document.querySelector('.puzzle__feedback');
-    if (feedback && feedback.classList.contains('fail')) {
-        Interface.log('Puzzle Failed. Stopping analysis.');
+    const isActiveFail = feedback?.classList.contains('fail') && 
+                         feedback?.querySelector('.instruction') !== null;
+    if (isActiveFail) {
+        Interface.log('Puzzle failed, waiting for next puzzle.');
         clearBoard();
         return;
     }
-
     const fenUtil    = new FenUtils();
     const actualTurn = fenUtil.getTurn();
 
@@ -954,23 +955,29 @@ function observeNewMoves() {
     const onBoardChange = () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
+            // Always read playerColor in case we moved to a new puzzle
+            const newPlayerColor = new FenUtils().getBoardOrientation();
+            if (newPlayerColor !== playerColor) {
+                playerColor = newPlayerColor;
+                Interface.boardUtils.updateBoardOrientation(playerColor);
+                Interface.log(`Player color updated to ${playerColor}`);
+            }
+
             const newFen = fenUtil.getFen();
-            // return if nothing actually changed
             if (newFen === lastFen) return;
             lastFen = newFen;
- 
-            const fenTurn = newFen.split(' ')[1]; // 'w' or 'b'
- 
+
             updateBoard(false);
- 
-            if (fenTurn === playerColor) {
+
+            const actualTurn = fenUtil.getTurn();
+            if (actualTurn === playerColor) {
                 removeSiteMoveMarkings();
                 Interface.boardUtils.removeBestMarkings();
                 sendBestMove();
             } else {
                 removeSiteMoveMarkings();
                 Interface.boardUtils.removeBestMarkings();
-                Interface.log(`Opponent's turn (${fenTurn}), cleared highlights.`);
+                Interface.log(`Opponent's turn (${actualTurn}), cleared highlights.`);
             }
         }, 120);
     };
@@ -1001,10 +1008,16 @@ function observeNewMoves() {
         let lastActiveColor = null;
  
         setInterval(() => {
+            const newPlayerColor = new FenUtils().getBoardOrientation();
+            if (newPlayerColor !== playerColor) {
+                playerColor = newPlayerColor;
+                Interface.boardUtils.updateBoardOrientation(playerColor);
+                Interface.log(`Player color updated to ${playerColor}`);
+            }
+
             const activeColor = getLichessActiveColor();
             if (activeColor === lastActiveColor) return;
             lastActiveColor = activeColor;
- 
             Interface.log(`Clock switched to ${activeColor} (you=${playerColor})`);
  
             if (activeColor === playerColor) {
