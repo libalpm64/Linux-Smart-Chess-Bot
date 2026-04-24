@@ -907,16 +907,16 @@
 
     function animateSquareToSquare (src, dest, piece, completeFn) {
       // get information about the source and destination squares
-      var $srcSquare = $('#' + squareElsIds[src])
+      var $srcSquare = $container.find('#' + squareElsIds[src])
       var srcSquarePosition = $srcSquare.offset()
-      var $destSquare = $('#' + squareElsIds[dest])
+      var $destSquare = $container.find('#' + squareElsIds[dest])
       var destSquarePosition = $destSquare.offset()
 
       // create the animated piece and absolutely position it
       // over the source square
       var animatedPieceId = uuid()
-      $('body').append(buildPieceHTML(piece, true, animatedPieceId))
-      var $animatedPiece = $('#' + animatedPieceId)
+      $('body', $container[0].ownerDocument).append(buildPieceHTML(piece, true, animatedPieceId))
+      var $animatedPiece = $('body', $container[0].ownerDocument).find('#' + animatedPieceId)
       $animatedPiece.css({
         display: '',
         position: 'absolute',
@@ -949,14 +949,14 @@
     }
 
     function animateSparePieceToSquare (piece, dest, completeFn) {
-      var srcOffset = $('#' + sparePiecesElsIds[piece]).offset()
-      var $destSquare = $('#' + squareElsIds[dest])
+      var srcOffset = $container.find('#' + sparePiecesElsIds[piece]).offset()
+      var $destSquare = $container.find('#' + squareElsIds[dest])
       var destOffset = $destSquare.offset()
 
       // create the animate piece
       var pieceId = uuid()
-      $('body').append(buildPieceHTML(piece, true, pieceId))
-      var $animatedPiece = $('#' + pieceId)
+      $('body', $container[0].ownerDocument).append(buildPieceHTML(piece, true, pieceId))
+      var $animatedPiece = $('body', $container[0].ownerDocument).find('#' + pieceId)
       $animatedPiece.css({
         display: '',
         position: 'absolute',
@@ -1010,12 +1010,12 @@
 
         // clear a piece
         if (animation.type === 'clear') {
-          $('#' + squareElsIds[animation.square] + ' .' + CSS.piece)
+          $container.find('#' + squareElsIds[animation.square] + ' .' + CSS.piece)
             .fadeOut(config.trashSpeed, onFinishAnimation3)
 
         // add a piece with no spare pieces - fade the piece onto the square
         } else if (animation.type === 'add' && !config.sparePieces) {
-          $('#' + squareElsIds[animation.square])
+          $container.find('#' + squareElsIds[animation.square])
             .append(buildPieceHTML(animation.piece, true))
             .find('.' + CSS.piece)
             .fadeIn(config.appearSpeed, onFinishAnimation3)
@@ -1115,7 +1115,7 @@
       for (var i in currentPosition) {
         if (!currentPosition.hasOwnProperty(i)) continue
 
-        $('#' + squareElsIds[i]).append(buildPieceHTML(currentPosition[i]))
+        $container.find('#' + squareElsIds[i]).append(buildPieceHTML(currentPosition[i]))
       }
     }
 
@@ -1175,7 +1175,7 @@
       for (var i in squareElsIds) {
         if (!squareElsIds.hasOwnProperty(i)) continue
 
-        squareElsOffsets[i] = $('#' + squareElsIds[i]).offset()
+        squareElsOffsets[i] = $container.find('#' + squareElsIds[i]).offset()
       }
     }
 
@@ -1211,7 +1211,7 @@
       }
 
       // get source square position
-      var sourceSquarePosition = $('#' + squareElsIds[draggedPieceSource]).offset()
+      var sourceSquarePosition = $container.find('#' + squareElsIds[draggedPieceSource]).offset()
 
       // animate the piece to the target square
       var opts = {
@@ -1252,7 +1252,7 @@
       setCurrentPosition(newPosition)
 
       // get target square information
-      var targetSquarePosition = $('#' + squareElsIds[square]).offset()
+      var targetSquarePosition = $container.find('#' + squareElsIds[square]).offset()
 
       // animation complete
       function onAnimationComplete () {
@@ -1309,7 +1309,7 @@
 
       if (source !== 'spare') {
         // highlight the source square and hide the piece
-        $('#' + squareElsIds[source])
+        $container.find('#' + squareElsIds[source])
           .addClass(CSS.highlight1)
           .find('.' + CSS.piece)
           .css('display', 'none')
@@ -1331,12 +1331,12 @@
 
       // remove highlight from previous square
       if (validSquare(draggedPieceLocation)) {
-        $('#' + squareElsIds[draggedPieceLocation]).removeClass(CSS.highlight2)
+        $container.find('#' + squareElsIds[draggedPieceLocation]).removeClass(CSS.highlight2)
       }
 
       // add highlight to new square
       if (validSquare(location)) {
-        $('#' + squareElsIds[location]).addClass(CSS.highlight2)
+        $container.find('#' + squareElsIds[location]).addClass(CSS.highlight2)
       }
 
       // run onDragMove
@@ -1750,7 +1750,7 @@
         .on('mouseleave', '.' + CSS.square, mouseleaveSquare)
 
       // piece drag
-      var $window = $(window)
+      var $window = $($container[0].ownerDocument.defaultView || window)
       $window
         .on('mousemove', throttledMousemoveWindow)
         .on('mouseup', mouseupWindow)
@@ -1780,8 +1780,8 @@
 
       // create the drag piece
       var draggedPieceId = uuid()
-      $('body').append(buildPieceHTML('wP', true, draggedPieceId))
-      $draggedPiece = $('#' + draggedPieceId)
+      $('body', $container[0].ownerDocument).append(buildPieceHTML('wP', true, draggedPieceId))
+      $draggedPiece = $('body', $container[0].ownerDocument).find('#' + draggedPieceId)
 
       // TODO: need to remove this dragged piece element if the board is no
       // longer in the DOM
