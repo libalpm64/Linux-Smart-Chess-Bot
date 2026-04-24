@@ -843,12 +843,29 @@ function getNodeBestMoves(request) {
                 return;
             }
             console.log('Parsed data:', data);
-            const { depth, movetime, move } = data;
+            const { depth, movetime } = data;
+            let move = data.move;
+            let cp = undefined;
+            let mate = undefined;
+
+            if (data.lines && data.lines.length > 0) {
+                const bestLine = data.lines[0];
+                if (bestLine.moves && bestLine.moves.length > 0) {
+                    move = bestLine.moves[0];
+                }
+                if (bestLine.scoreType === 'cp') cp = bestLine.score;
+                if (bestLine.scoreType === 'mate') mate = bestLine.score;
+            }
+
             console.log('Server response:', data);
             if (!move || move.length < 4) {
                 resetBestMoveBtn();
                 Interface.log('Server returned invalid move.');
                 return;
+            }
+
+            if (cp !== undefined || mate !== undefined) {
+                Interface.boardUtils.updateEvalBar(cp, mate, playerColor);
             }
             if (move === 'e2e4' && request.fen.includes('8/p7/')) {
                 Interface.log('Skipping bad FEN response');
