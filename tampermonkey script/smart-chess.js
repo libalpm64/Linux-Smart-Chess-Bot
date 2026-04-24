@@ -40,10 +40,10 @@ const MAX_LOGS          = 50;
 
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
-const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js', 'koivisto.js'];
-const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM', 'Koivisto', 'go_server'];
+const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js'];
+const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM', 'go_server'];
 const GO_ENGINE_NAME = ENGINE_NAMES[ENGINE_NAMES.length - 1];
-const JS_ENGINE_COUNT = 5;
+const JS_ENGINE_COUNT = ENGINE_NAMES.length - 1;
 
 const best_move_color                = [0,   0,   250, 0.5];
 const opposite_best_move_color       = [250, 0,   0,   0.5];
