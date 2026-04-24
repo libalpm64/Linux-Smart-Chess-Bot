@@ -337,15 +337,13 @@ function InterfaceUtils() {
 
         markMove: (from, to, color) => {
             if (!Gui?.document) return;
-            if (CURRENT_SITE === CHESS_COM && !isFirefox()) {
-                [from, to].forEach((sq, i) => {
-                    const el = this.boardUtils.findSquareElem(sq);
-                    if (!el) return;
-                    el.style.scale = i === 0 ? '0.8' : '0.9';
-                    el.style.backgroundColor = `rgb(${color[0]},${color[1]},${color[2]})`;
-                    activeGuiMoveHighlights.push(el);
-                });
-            }
+            [from, to].forEach((sq, i) => {
+                const el = Interface.boardUtils.findSquareElem(sq);
+                if (!el) return;
+                el.style.scale = i === 0 ? '0.8' : '0.9';
+                el.style.backgroundColor = `rgba(${color[0]},${color[1]},${color[2]},${color[3] || 0.5})`;
+                activeGuiMoveHighlights.push(el);
+            });
             if (displayMovesOnSite && isPlayerTurn)
                 markMoveToSite(from, to, color);
         },
