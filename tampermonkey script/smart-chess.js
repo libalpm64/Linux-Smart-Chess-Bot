@@ -23,97 +23,97 @@
 // @updateURL   https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main/tampermonkey%20script/system_meta.js
 // ==/UserScript==
 
-const repositoryRawURL  = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main';
+const repositoryRawURL = 'https://raw.githubusercontent.com/libalpm64/Linux-Smart-Chess-Bot/refs/heads/main';
 const engineBase = `${repositoryRawURL}/engines`;
-const LICHESS_API       = 'https://lichess.org/api/cloud-eval';
-const CHESS_COM         = 0;
-const LICHESS_ORG       = 1;
-const TURN_UPDATE_FIX   = true;
+const LICHESS_API = 'https://lichess.org/api/cloud-eval';
+const CHESS_COM = 0;
+const LICHESS_ORG = 1;
+const TURN_UPDATE_FIX = true;
 
-const MAX_DEPTH         = 20;
-const MIN_DEPTH         = 1;
-const MAX_MOVETIME      = 2000;
-const MIN_MOVETIME      = 50;
-const MAX_ELO           = 3500;
-const DEPTH_MODE        = 0;
-const MAX_LOGS          = 50;
+const MAX_DEPTH = 20;
+const MIN_DEPTH = 1;
+const MAX_MOVETIME = 2000;
+const MIN_MOVETIME = 50;
+const MAX_ELO = 3500;
+const DEPTH_MODE = 0;
+const MAX_LOGS = 50;
 
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
-const ENGINE_RESOURCES  = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js'];
-const ENGINE_NAMES      = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM', 'go_server'];
+const ENGINE_RESOURCES = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js'];
+const ENGINE_NAMES = ['Lozza', 'Stockfish 5', 'Stockfish 2018', 'TomitankChess', 'Stockfish 18 ASM', 'go_server'];
 const GO_ENGINE_NAME = ENGINE_NAMES[ENGINE_NAMES.length - 1];
 const JS_ENGINE_COUNT = ENGINE_NAMES.length - 1;
 
-const best_move_color                = [0,   0,   250, 0.5];
-const opposite_best_move_color       = [250, 0,   0,   0.5];
-const possible_moves_colors          = [[200,180,0,0.9],[150,180,0,0.9],[100,180,0,0.9],[50,180,0,0.9]];
-const opposite_possible_moves_colors = [[250,200,200,0.9],[250,150,150,0.9],[250,100,100,0.9],[250,50,50,0.9]];
+const best_move_color = [0, 0, 250, 0.5];
+const opposite_best_move_color = [250, 0, 0, 0.5];
+const possible_moves_colors = [[200, 180, 0, 0.9], [150, 180, 0, 0.9], [100, 180, 0, 0.9], [50, 180, 0, 0.9]];
+const opposite_possible_moves_colors = [[250, 200, 200, 0.9], [250, 150, 150, 0.9], [250, 100, 100, 0.9], [250, 50, 50, 0.9]];
 const defaultFromSquareStyle = 'border:4px solid rgb(0 0 0/50%);';
-const defaultToSquareStyle   = 'border:4px dashed rgb(0 0 0/50%);';
+const defaultToSquareStyle = 'border:4px dashed rgb(0 0 0/50%);';
 
 const DB = {
-    nightMode:'nightMode', engineMode:'engineMode', engineName:'engineName',
-    reload_every:'reload_every', reload_engine:'reload_engine',
-    enableUserLog:'enableUserLog', enableEngineLog:'enableEngineLog',
-    displayMovesOnSite:'displayMovesOnSite', show_opposite_moves:'show_opposite_moves',
-    use_book_moves:'use_book_moves', node_engine_url:'node_engine_url',
-    node_engine_name:'node_engine_name', current_depth:'current_depth',
-    current_movetime:'current_movetime', max_best_moves:'max_best_moves'
+    nightMode: 'nightMode', engineMode: 'engineMode', engineName: 'engineName',
+    reload_every: 'reload_every', reload_engine: 'reload_engine',
+    enableUserLog: 'enableUserLog', enableEngineLog: 'enableEngineLog',
+    displayMovesOnSite: 'displayMovesOnSite', show_opposite_moves: 'show_opposite_moves',
+    use_book_moves: 'use_book_moves', node_engine_url: 'node_engine_url',
+    node_engine_name: 'node_engine_name', current_depth: 'current_depth',
+    current_movetime: 'current_movetime', max_best_moves: 'max_best_moves'
 };
 
-let nightMode           = false;
-let engineMode          = 0;
-let engineName         = ENGINE_NAMES[0];
-let reload_every        = 10;
-let reload_engine       = false;
-let enableUserLog       = true;
-let enableEngineLog     = true;
-let displayMovesOnSite  = false;
+let nightMode = false;
+let engineMode = 0;
+let engineName = ENGINE_NAMES[0];
+let reload_every = 10;
+let reload_engine = false;
+let enableUserLog = true;
+let enableEngineLog = true;
+let displayMovesOnSite = false;
 let show_opposite_moves = false;
-let use_book_moves      = false;
-let node_engine_url     = 'http://localhost:5000';
-let node_engine_name    = 'komodo-201-64';
-let current_depth       = Math.round(MAX_DEPTH / 2);
-let current_movetime    = Math.round(MAX_MOVETIME / 3);
-let max_best_moves      = 1;
+let use_book_moves = false;
+let node_engine_url = 'http://localhost:5000';
+let node_engine_name = 'komodo-201-64';
+let current_depth = Math.round(MAX_DEPTH / 2);
+let current_movetime = Math.round(MAX_MOVETIME / 3);
+let max_best_moves = 1;
 
-let lastBestMoveID      = 0;
-let guiPagesAdded       = false;
-let closedGui           = false;
-let reload_count        = 1;
+let lastBestMoveID = 0;
+let guiPagesAdded = false;
+let closedGui = false;
+let reload_count = 1;
 
-let Interface           = null;
-let CURRENT_SITE        = null;
-let boardElem           = null;
-let firstPieceElem      = null;
-let forcedBestMove      = false;
-let engine              = null;
-let engineObjectURL     = null;
-let loadedEngineName  = null;
+let Interface = null;
+let CURRENT_SITE = null;
+let boardElem = null;
+let firstPieceElem = null;
+let forcedBestMove = false;
+let engine = null;
+let engineObjectURL = null;
+let loadedEngineName = null;
 
-let chessBoardElem      = null;
-let turn                = '-';
-let last_turn           = null;
-let playerColor         = null;
-let lastPlayerColor     = null;
-let isPlayerTurn        = null;
-let lastFen             = null;
+let chessBoardElem = null;
+let turn = '-';
+let last_turn = null;
+let playerColor = null;
+let lastPlayerColor = null;
+let isPlayerTurn = null;
+let lastFen = null;
 
-let activeGuiMoveHighlights  = [];
+let activeGuiMoveHighlights = [];
 let activeSiteMoveHighlights = [];
-let possible_moves           = [];
+let possible_moves = [];
 
-let engineLogNum        = 1;
-let userscriptLogNum    = 1;
-let enemyScore          = 0;
-let myScore             = 0;
+let engineLogNum = 1;
+let userscriptLogNum = 1;
+let enemyScore = 0;
+let myScore = 0;
 
 const Gui = new UserGui();
-Gui.settings.window.title    = 'Smart Chess Bot';
+Gui.settings.window.title = 'Smart Chess Bot';
 Gui.settings.window.external = true;
-Gui.settings.window.size     = { width: 500, height: 620 };
-Gui.settings.gui.external    = { popup: true, style: '' };
+Gui.settings.window.size = { width: 500, height: 620 };
+Gui.settings.gui.external = { popup: true, style: '' };
 
 Gui.settings.gui.external.style += GM_getResourceText('chessboard.css');
 Gui.settings.gui.external.style += `
@@ -135,10 +135,10 @@ body { display:block; margin:0 auto; width:360px; }
 .wiggle { display:inline-block; animation:wiggle 1s infinite; }
 `;
 
-const isFirefox         = () => navigator.userAgent.toLowerCase().includes('firefox');
-const alphabetPosition  = ch => ch.charCodeAt(0) - 97;
-const removeDuplicates  = arr => [...new Set(arr)];
-const sleep             = ms => new Promise(r => setTimeout(r, ms));
+const isFirefox = () => navigator.userAgent.toLowerCase().includes('firefox');
+const alphabetPosition = ch => ch.charCodeAt(0) - 97;
+const removeDuplicates = arr => [...new Set(arr)];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function fenSquareToChessComSquare(sq) {
     const [x, y] = sq.split('');
@@ -174,7 +174,7 @@ function FenUtils() {
     this.getPieceOppositeColor = s => (s === s.toUpperCase() ? 'b' : 'w');
 
     this.getFenCodeFromPieceElem = elem => {
-        if (CURRENT_SITE === CHESS_COM)   return this.getChessComPieceFen(elem);
+        if (CURRENT_SITE === CHESS_COM) return this.getChessComPieceFen(elem);
         if (CURRENT_SITE === LICHESS_ORG) return this.getLichessPieceFen(elem);
         return null;
     };
@@ -207,7 +207,7 @@ function FenUtils() {
                 const fenStr = fenInput.value.trim().split(' ')[0];
                 const rows = fenStr.split('/');
                 const board = [];
-                
+
                 rows.forEach(rowStr => {
                     const row = [];
                     for (let char of rowStr) {
@@ -275,7 +275,7 @@ function FenUtils() {
     };
 
     this.getBoardOrientation = () => {
-        if (CURRENT_SITE === CHESS_COM) return document.querySelector('.board.flipped') ? 'b' : 'w';
+        if (CURRENT_SITE === CHESS_COM) return chessBoardElem?.classList.contains('flipped') ? 'b' : 'w';
         if (CURRENT_SITE === LICHESS_ORG) {
             const cgWrap = document.querySelector('.cg-wrap');
             return cgWrap?.classList.contains('orientation-black') ? 'b' : 'w';
@@ -294,7 +294,9 @@ function FenUtils() {
             }
             return getLichessTurnFromMoveList();
         }
-        // Chess.com: use the global turn variable set by piece movement tracking
+        // Chess.com: use the DOM detection, fallback to global turn if fails.
+        const domTurn = typeof getChessComTurnFromDOM === 'function' ? getChessComTurnFromDOM() : '';
+        if (domTurn !== '') return domTurn;
         return typeof turn !== 'undefined' ? turn : 'w';
     };
 
@@ -377,16 +379,16 @@ function InterfaceUtils() {
             const text = $('#eval-bar-text');
             const container = $('#eval-bar-container');
             if (!fill || !text || !container) return;
-            
+
             let percent = 50;
             let evalText = "0.0";
-            
+
             let absoluteCp = cp;
             let absoluteMate = mate;
-            
+
             if (turn === 'b' && cp !== undefined) absoluteCp = -cp;
             if (turn === 'b' && mate !== undefined) absoluteMate = -mate;
-            
+
             if (absoluteMate !== undefined) {
                 percent = absoluteMate > 0 ? 100 : 0;
                 evalText = absoluteMate > 0 ? `M${Math.abs(absoluteMate)}` : `-M${Math.abs(absoluteMate)}`;
@@ -395,8 +397,8 @@ function InterfaceUtils() {
                 evalText = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
                 percent = 50 + 50 * (2 / (1 + Math.exp(-0.004 * absoluteCp)) - 1);
             }
-            
-            if (color === 'b') { 
+
+            if (color === 'b') {
                 fill.style.height = `${100 - percent}%`;
                 fill.style.backgroundColor = '#404040';
                 container.style.backgroundColor = '#f2f2f2';
@@ -416,7 +418,7 @@ function InterfaceUtils() {
         if (!container) return;
         const el = document.createElement('div');
         el.classList.add('list-group-item');
-        if (str.includes('info'))     el.classList.add('list-group-item-info');
+        if (str.includes('info')) el.classList.add('list-group-item-info');
         if (str.includes('bestmove')) el.classList.add('list-group-item-success');
         el.innerText = `#${num} ${str}`;
         if (container.children.length >= MAX_LOGS) container.lastChild.remove();
@@ -424,7 +426,7 @@ function InterfaceUtils() {
     };
 
     this.engineLog = str => { if (enableEngineLog) appendLog('#engine-log-container', str, engineLogNum++); };
-    this.log       = str => { if (enableUserLog)   appendLog('#userscript-log-container', str, userscriptLogNum++); };
+    this.log = str => { if (enableUserLog) appendLog('#userscript-log-container', str, userscriptLogNum++); };
 
     this.getBoardOrientation = () => {
         if (CURRENT_SITE === CHESS_COM) return document.querySelector('.board.flipped') ? 'b' : 'w';
@@ -463,7 +465,7 @@ function InterfaceUtils() {
 
 function LozzaUtility() {
     this.extractInfo = str => {
-        const info = ['time','nps','depth','pv'].reduce((acc, key) => {
+        const info = ['time', 'nps', 'depth', 'pv'].reduce((acc, key) => {
             const m = str.match(`${key} (\\d+)`);
             if (m) acc[key] = m[1];
             return acc;
@@ -476,7 +478,7 @@ function LozzaUtility() {
     };
 }
 
-let _lichessSvgLayer   = null;
+let _lichessSvgLayer = null;
 let _lichessArrowNodes = [];
 
 function _getLichessSvgLayer() {
@@ -491,15 +493,15 @@ function _getLichessSvgLayer() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.id = 'scb-svg-hud';
     Object.assign(svg.style, {
-        position:      'absolute',
-        top:           '0',
-        left:          '0',
-        width:         '100%',
-        height:        '100%',
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
         pointerEvents: 'none',
         // Z-Index is high because it will opaque out Lichess's DOM element override
-        zIndex:        '100',
-        overflow:      'visible',
+        zIndex: '100',
+        overflow: 'visible',
     });
     svg.setAttribute('viewBox', '0 0 8 8');
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -520,8 +522,8 @@ function _getLichessSvgLayer() {
         marker.appendChild(path);
         return marker;
     };
-    defs.appendChild(makeMarker('scb-head-blue',   'rgba(0,0,250,0.9)'));
-    defs.appendChild(makeMarker('scb-head-red',    'rgba(250,0,0,0.9)'));
+    defs.appendChild(makeMarker('scb-head-blue', 'rgba(0,0,250,0.9)'));
+    defs.appendChild(makeMarker('scb-head-red', 'rgba(250,0,0,0.9)'));
     defs.appendChild(makeMarker('scb-head-yellow', 'rgba(200,180,0,0.9)'));
     defs.appendChild(makeMarker('scb-head-orange', 'rgba(250,150,0,0.9)'));
     svg.appendChild(defs);
@@ -535,9 +537,9 @@ function _getLichessSvgLayer() {
 }
 
 function _sqToSvgCoords(notation) {
-    const wrap    = document.querySelector('.cg-wrap');
+    const wrap = document.querySelector('.cg-wrap');
     const isBlack = wrap?.classList.contains('orientation-black');
-    const files   = { a:0, b:1, c:2, d:3, e:4, f:5, g:6, h:7 };
+    const files = { a: 0, b: 1, c: 2, d: 3, e: 4, f: 5, g: 6, h: 7 };
     let x = files[notation[0]];
     let y = 8 - parseInt(notation[1]);
     if (isBlack) { x = 7 - x; y = 7 - y; }
@@ -546,8 +548,8 @@ function _sqToSvgCoords(notation) {
 
 function _pickSvgMarker(rgba) {
     if (rgba[2] > rgba[0]) return 'scb-head-blue';
-    if (rgba[0] >= 250)    return 'scb-head-red';
-    if (rgba[0] >= 200)    return 'scb-head-yellow';
+    if (rgba[0] >= 250) return 'scb-head-red';
+    if (rgba[0] >= 200) return 'scb-head-yellow';
     return 'scb-head-orange';
 }
 
@@ -557,15 +559,15 @@ function _drawLichessArrow(svg, fromSq, toSq, rgba, lineIndex) {
     if (!s || !e) return;
 
     const strokeColor = `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${rgba[3] ?? 0.85})`;
-    const fillColor   = `rgba(${rgba[0]},${rgba[1]},${rgba[2]},0.15)`;
+    const fillColor = `rgba(${rgba[0]},${rgba[1]},${rgba[2]},0.15)`;
 
     const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    box.setAttribute('x',            s.x + 0.05);
-    box.setAttribute('y',            s.y + 0.05);
-    box.setAttribute('width',        '0.9');
-    box.setAttribute('height',       '0.9');
-    box.setAttribute('fill',         fillColor);
-    box.setAttribute('stroke',       strokeColor);
+    box.setAttribute('x', s.x + 0.05);
+    box.setAttribute('y', s.y + 0.05);
+    box.setAttribute('width', '0.9');
+    box.setAttribute('height', '0.9');
+    box.setAttribute('fill', fillColor);
+    box.setAttribute('stroke', strokeColor);
     box.setAttribute('stroke-width', '0.06');
     svg.appendChild(box);
     _lichessArrowNodes.push(box);
@@ -586,11 +588,11 @@ function _drawLichessArrow(svg, fromSq, toSq, rgba, lineIndex) {
     }
 
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d',            d);
-    path.setAttribute('fill',         'none');
-    path.setAttribute('stroke',       strokeColor);
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', strokeColor);
     path.setAttribute('stroke-width', lineIndex === 0 ? '0.13' : '0.09');
-    path.setAttribute('marker-end',   `url(#${_pickSvgMarker(rgba)})`);
+    path.setAttribute('marker-end', `url(#${_pickSvgMarker(rgba)})`);
     if (lineIndex > 0) path.setAttribute('stroke-dasharray', '0.12 0.08');
     svg.appendChild(path);
     _lichessArrowNodes.push(path);
@@ -610,7 +612,7 @@ function markMoveToSite(fromSq, toSq, rgba) {
             chessBoardElem.prepend(el);
         };
         highlight(fromSq, defaultFromSquareStyle);
-        highlight(toSq,   defaultToSquareStyle);
+        highlight(toSq, defaultToSquareStyle);
         return;
     }
 
@@ -630,9 +632,36 @@ function removeSiteMoveMarkings() {
     _lichessArrowNodes = [];
 }
 
+function getChessComTurnFromDOM() {
+    const moveList = document.querySelector('wc-simple-move-list');
+    if (moveList) {
+        const selectedNode = moveList.querySelector('div.node:has(.selected), div.node .selected');
+        if (selectedNode) {
+            const node = selectedNode.closest('.node') || selectedNode;
+            if (node.classList.contains('white-move')) return 'b';
+            if (node.classList.contains('black-move')) return 'w';
+        }
+        const nodes = moveList.querySelectorAll('div.node');
+        if (nodes.length > 0) return nodes.length % 2 === 0 ? 'w' : 'b';
+    }
+
+    const activeClock = document.querySelector('div.clock-player-turn');
+    if (activeClock) {
+        if (activeClock.classList.contains('clock-white')) return 'w';
+        if (activeClock.classList.contains('clock-black')) return 'b';
+    }
+    return '';
+}
+
 function getTurn() {
     Interface.boardUtils.removeBestMarkings();
     removeSiteMoveMarkings();
+
+    if (CURRENT_SITE === CHESS_COM) {
+        const domTurn = getChessComTurnFromDOM();
+        if (domTurn !== '') return domTurn;
+    }
+
     for (const hl of chessBoardElem.querySelectorAll('.highlight')) {
         if (hl.classList.contains('custom')) continue;
         const sqCls = [...hl.classList].find(c => c.includes('square'));
@@ -653,14 +682,14 @@ function getElo() {
 
 function getRank() {
     const ratio = engineMode === DEPTH_MODE ? current_depth / MAX_DEPTH : current_movetime / MAX_MOVETIME;
-    const idx   = Math.min(Math.round(ratio * rank.length), rank.length - 1);
+    const idx = Math.min(Math.round(ratio * rank.length), rank.length - 1);
     return rank[idx];
 }
 
 function setEloDescription(eloElem) {
     if (!eloElem) return;
     eloElem.querySelector('#value').innerText = `Elo: ${getElo()}`;
-    eloElem.querySelector('#rank').innerText  = `Rank: ${getRank()}`;
+    eloElem.querySelector('#rank').innerText = `Rank: ${getRank()}`;
     eloElem.querySelector('#power').innerText = engineMode === DEPTH_MODE
         ? `Depth: ${current_depth}` : `Move Time: ${current_movetime}`;
 }
@@ -677,7 +706,7 @@ function moveResult(from, to, power, clear = true) {
 
     if (!forcedBestMove) {
         if (isPlayerTurn) myScore += Number(power);
-        else              enemyScore += Number(power);
+        else enemyScore += Number(power);
         Interface.boardUtils.updateBoardPower(myScore, enemyScore);
     } else {
         forcedBestMove = false;
@@ -688,7 +717,7 @@ function moveResult(from, to, power, clear = true) {
     const extras = removeDuplicates(possible_moves).slice(0, max_best_moves - 1);
     extras.forEach((mv, i) => {
         Interface.boardUtils.markMove(
-            mv.slice(0,2), mv.slice(2,4),
+            mv.slice(0, 2), mv.slice(2, 4),
             isPlayerTurn ? possible_moves_colors[i] : opposite_possible_moves_colors[i]
         );
     });
@@ -701,11 +730,11 @@ const START_FEN_B = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1';
 
 function updateBoard(clear = true) {
     if (clear) clearBoard();
-    
+
     const fenUtil = new FenUtils();
     const fen = fenUtil.getFen();
     const currentTurn = fen.split(' ')[1]; // 'w' or 'b'
-    
+
     // Reset scores on start position
     if (fen.startsWith('rnbqkbnr')) {
         enemyScore = myScore = 0;
@@ -724,7 +753,7 @@ function updateBoard(clear = true) {
 }
 
 function sendBestMove() {
-    const fenUtil    = new FenUtils();
+    const fenUtil = new FenUtils();
     const actualTurn = fenUtil.getTurn();
 
     if (actualTurn === null) {
@@ -811,7 +840,7 @@ function getBookMoves(request) {
             }
             const move = data.pvs[0].moves.split(' ')[0];
             if (!move || move.length < 4) return getBestMoves(request);
-            moveResult(move.slice(0,2), move.slice(2,4), current_depth, true);
+            moveResult(move.slice(0, 2), move.slice(2, 4), current_depth, true);
         },
         onerror: () => { if (lastBestMoveID === request.id) getBestMoves(request); }
     });
@@ -874,7 +903,7 @@ function getNodeBestMoves(request) {
             Interface.log(`Got move: ${move}, depth: ${depth}, engine: ${node_engine_name}`);
             Interface.updateBestMoveProgress(
                 engineMode === DEPTH_MODE ? `Depth: ${depth}` : `Move time: ${movetime || 500} ms`);
-            moveResult(move.slice(0,2), move.slice(2,4), depth || 10, true);
+            moveResult(move.slice(0, 2), move.slice(2, 4), depth || 10, true);
         },
         onerror: res => {
             console.log('Request failed:', res);
@@ -899,7 +928,7 @@ function getBestMoves(request) {
         const data = e.data;
         if (data.includes('bestmove')) {
             const move = data.split(' ')[1];
-            moveResult(move.slice(0,2), move.slice(2,4), current_depth, true);
+            moveResult(move.slice(0, 2), move.slice(2, 4), current_depth, true);
         } else if (data.includes('info')) {
             const info = LozzaUtils.extractInfo(data);
             const pvMove = data.includes('pv') ? data.slice(data.lastIndexOf('pv')).split(' ')[1] : null;
@@ -923,7 +952,7 @@ function loadChessEngine(forced = false, callback) {
         callback();
         return;
     }
-    
+
     const engineIndex = ENGINE_NAMES.indexOf(engineName);
     const needsReload = forced || loadedEngineName !== engineName || (reload_engine && reload_count >= reload_every);
     if (!needsReload) {
@@ -979,7 +1008,7 @@ function updatePlayerColor(callback) {
 
 function observeNewMoves() {
     const fenUtil = new FenUtils();
- 
+
     // Returns 'w' or 'b' for whose clock is currently "running"
     // by checking which rclock element has the "running" class.
     function getLichessActiveColor() {
@@ -990,10 +1019,10 @@ function observeNewMoves() {
         // Fallback: read from FEN
         return fenUtil.getFen().split(' ')[1] || 'w';
     }
- 
+
     updateBoard(false);
     setTimeout(() => sendBestMove(), 300);
- 
+
     let debounceTimer = null;
     const onBoardChange = () => {
         clearTimeout(debounceTimer);
@@ -1024,32 +1053,32 @@ function observeNewMoves() {
             }
         }, 120);
     };
- 
+
     const cgWrap = document.querySelector('.cg-wrap') || chessBoardElem;
     if (cgWrap) {
         new MutationObserver(onBoardChange).observe(cgWrap, {
-            childList:       true,
-            subtree:         true,
-            attributes:      true,
+            childList: true,
+            subtree: true,
+            attributes: true,
             attributeFilter: ['class', 'style'],
         });
     }
- 
+
     const fenInput = document.querySelector(
         '.fen-pnl input, .analyse__controls input.fen, input[name="fen"]'
     );
     if (fenInput) {
         new MutationObserver(onBoardChange).observe(fenInput, {
-            attributes:      true,
+            attributes: true,
             attributeFilter: ['value'],
         });
-        fenInput.addEventListener('input',  onBoardChange);
+        fenInput.addEventListener('input', onBoardChange);
         fenInput.addEventListener('change', onBoardChange);
     }
- 
+
     if (CURRENT_SITE === LICHESS_ORG) {
         let lastActiveColor = null;
- 
+
         setInterval(() => {
             const newPlayerColor = new FenUtils().getBoardOrientation();
             if (newPlayerColor !== playerColor) {
@@ -1062,11 +1091,11 @@ function observeNewMoves() {
             if (activeColor === lastActiveColor) return;
             lastActiveColor = activeColor;
             Interface.log(`Clock switched to ${activeColor} (you=${playerColor})`);
- 
+
             if (activeColor === playerColor) {
                 removeSiteMoveMarkings();
                 Interface.boardUtils.removeBestMarkings();
- 
+
                 setTimeout(() => {
                     updateBoard(false);
                     sendBestMove();
@@ -1090,8 +1119,8 @@ function observeNewMoves() {
                 }, 150);
             }
         }).observe(document.body, {
-            subtree:         true,
-            attributes:      true,
+            subtree: true,
+            attributes: true,
             attributeFilter: ['class'],
         });
     }
@@ -1106,16 +1135,16 @@ function applyNightMode() {
             : [Gui.document.querySelector(sel)].filter(Boolean);
         els.forEach(el => el.classList.toggle('night', nightMode));
     };
-    toggleSel('body',                false);
-    toggleSel('.card',               true);
-    toggleSel('.card-title',         true);
-    toggleSel('.form-control',       true);
-    toggleSel('label',               true);
-    toggleSel('.checkmark',          true);
-    toggleSel('input',               true);
-    toggleSel('.list-group',         true);
-    toggleSel('.card-footer',        true);
-    toggleSel('#fen',                false);
+    toggleSel('body', false);
+    toggleSel('.card', true);
+    toggleSel('.card-title', true);
+    toggleSel('.form-control', true);
+    toggleSel('label', true);
+    toggleSel('.checkmark', true);
+    toggleSel('input', true);
+    toggleSel('.list-group', true);
+    toggleSel('.card-footer', true);
+    toggleSel('#fen', false);
     toggleSel('.nav-tabs .nav-link', true);
 }
 
@@ -1310,30 +1339,30 @@ function addGuiPages() {
 }
 
 const PIECES_B64 = {
-  "bB": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLXJ1bGU6ZXZlbm9kZDsgZmlsbC1vcGFjaXR5OjE7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDsgc3Ryb2tlLWxpbmVqb2luOnJvdW5kOyBzdHJva2UtbWl0ZXJsaW1pdDo0OyBzdHJva2UtZGFzaGFycmF5Om5vbmU7IHN0cm9rZS1vcGFjaXR5OjE7IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLDAuNikiPg0KICAgIDxnIHN0eWxlPSJmaWxsOiMwMDAwMDA7IHN0cm9rZTojMDAwMDAwOyBzdHJva2UtbGluZWNhcDpidXR0OyI+DQogICAgICA8cGF0aCBkPSJNIDksMzYgQyAxMi4zOSwzNS4wMyAxOS4xMSwzNi40MyAyMi41LDM0IEMgMjUuODksMzYuNDMgMzIuNjEsMzUuMDMgMzYsMzYgQyAzNiwzNiAzNy42NSwzNi41NCAzOSwzOCBDIDM4LjMyLDM4Ljk3IDM3LjM1LDM4Ljk5IDM2LDM4LjUgQyAzMi42MSwzNy41MyAyNS44OSwzOC45NiAyMi41LDM3LjUgQyAxOS4xMSwzOC45NiAxMi4zOSwzNy41MyA5LDM4LjUgQyA3LjY1LDM4Ljk5IDYuNjgsMzguOTcgNiwzOCBDIDcuMzUsMzYuNTQgOSwzNiA5LDM2IHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMTUsMzIgQyAxNy41LDM0LjUgMjcuNSwzNC41IDMwLDMyIEMgMzAuNSwzMC41IDMwLDMwIDMwLDMwIEMgMzAsMjcuNSAyNy41LDI2IDI3LjUsMjYgQyAzMywyNC41IDMzLjUsMTQuNSAyMi41LDEwLjUgQyAxMS41LDE0LjUgMTIsMjQuNSAxNy41LDI2IEMgMTcuNSwyNiAxNSwyNy41IDE1LDMwIEMgMTUsMzAgMTQuNSwzMC41IDE1LDMyIHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMjUgOCBBIDIuNSAyLjUgMCAxIDEgIDIwLDggQSAyLjUgMi41IDAgMSAxICAyNSA4IHoiLz4NCiAgICA8L2c+DQogICAgPHBhdGggZD0iTSAxNy41LDI2IEwgMjcuNSwyNiBNIDE1LDMwIEwgMzAsMzAgTSAyMi41LDE1LjUgTCAyMi41LDIwLjUgTSAyMCwxOCBMIDI1LDE4IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIvPg0KICA8L2c+DQo8L3N2Zz4NCg==",
-  "bK": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9ImZpbGw6bm9uZTsgZmlsbC1vcGFjaXR5OjE7IGZpbGwtcnVsZTpldmVub2RkOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLXdpZHRoOjEuNTsgc3Ryb2tlLWxpbmVjYXA6cm91bmQ7c3Ryb2tlLWxpbmVqb2luOnJvdW5kO3N0cm9rZS1taXRlcmxpbWl0OjQ7IHN0cm9rZS1kYXNoYXJyYXk6bm9uZTsgc3Ryb2tlLW9wYWNpdHk6MTsiPgogICAgPHBhdGggZD0iTSAyMi41LDExLjYzIEwgMjIuNSw2IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIgaWQ9InBhdGg2NTcwIi8+CiAgICA8cGF0aCBkPSJNIDIyLjUsMjUgQyAyMi41LDI1IDI3LDE3LjUgMjUuNSwxNC41IEMgMjUuNSwxNC41IDI0LjUsMTIgMjIuNSwxMiBDIDIwLjUsMTIgMTkuNSwxNC41IDE5LjUsMTQuNSBDIDE4LDE3LjUgMjIuNSwyNSAyMi41LDI1IiBzdHlsZT0iZmlsbDojMDAwMDAwO2ZpbGwtb3BhY2l0eToxOyBzdHJva2UtbGluZWNhcDpidXR0OyBzdHJva2UtbGluZWpvaW46bWl0ZXI7Ii8+CiAgICA8cGF0aCBkPSJNIDEyLjUsMzcgQyAxOCw0MC41IDI3LDQwLjUgMzIuNSwzNyBMIDMyLjUsMzAgQyAzMi41LDMwIDQxLjUsMjUuNSAzOC41LDE5LjUgQyAzNC41LDEzIDI1LDE2IDIyLjUsMjMuNSBMIDIyLjUsMjcgTCAyMi41LDIzLjUgQyAyMCwxNiAxMC41LDEzIDYuNSwxOS41IEMgMy41LDI1LjUgMTIuNSwzMCAxMi41LDMwIEwgMTIuNSwzNyIgc3R5bGU9ImZpbGw6IzAwMDAwMDsgc3Ryb2tlOiMwMDAwMDA7Ii8+CiAgICA8cGF0aCBkPSJNIDIwLDggTCAyNSw4IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIvPgogICAgPHBhdGggZD0iTSAzMiwyOS41IEMgMzIsMjkuNSA0MC41LDI1LjUgMzguMDMsMTkuODUgQyAzNC4xNSwxNCAyNSwxOCAyMi41LDI0LjUgTCAyMi41LDI2LjYgTCAyMi41LDI0LjUgQyAyMCwxOCAxMC44NSwxNCA2Ljk3LDE5Ljg1IEMgNC41LDI1LjUgMTMsMjkuNSAxMywyOS41IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsiLz4KICAgIDxwYXRoIGQ9Ik0gMTIuNSwzMCBDIDE4LDI3IDI3LDI3IDMyLjUsMzAgTSAxMi41LDMzLjUgQyAxOCwzMC41IDI3LDMwLjUgMzIuNSwzMy41IE0gMTIuNSwzNyBDIDE4LDM0IDI3LDM0IDMyLjUsMzciIHN0eWxlPSJmaWxsOm5vbmU7IHN0cm9rZTojZmZmZmZmOyIvPgogIDwvZz4KPC9zdmc+Cg==",
-  "bN": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyMiwxMCBDIDMyLjUsMTEgMzguNSwxOCAzOCwzOSBMIDE1LDM5IEMgMTUsMzAgMjUsMzIuNSAyMywxOCINCiAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7IHN0cm9rZTojMDAwMDAwOyIgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyNCwxOCBDIDI0LjM4LDIwLjkxIDE4LjQ1LDI1LjM3IDE2LDI3IEMgMTMsMjkgMTMuMTgsMzEuMzQgMTEsMzEgQyA5Ljk1OCwzMC4wNiAxMi40MSwyNy45NiAxMSwyOCBDIDEwLDI4IDExLjE5LDI5LjIzIDEwLDMwIEMgOSwzMCA1Ljk5NywzMSA2LDI2IEMgNiwyNCAxMiwxNCAxMiwxNCBDIDEyLDE0IDEzLjg5LDEyLjEgMTQsMTAuNSBDIDEzLjI3LDkuNTA2IDEzLjUsOC41IDEzLjUsNy41IEMgMTQuNSw2LjUgMTYuNSwxMCAxNi41LDEwIEwgMTguNSwxMCBDIDE4LjUsMTAgMTkuMjgsOC4wMDggMjEsNyBDIDIyLDcgMjIsMTAgMjIsMTAiDQogICAgICBzdHlsZT0iZmlsbDojMDAwMDAwOyBzdHJva2U6IzAwMDAwMDsiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gOS41IDI1LjUgQSAwLjUgMC41IDAgMSAxIDguNSwyNS41IEEgMC41IDAuNSAwIDEgMSA5LjUgMjUuNSB6Ig0KICAgICAgc3R5bGU9ImZpbGw6I2ZmZmZmZjsgc3Ryb2tlOiNmZmZmZmY7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDE1IDE1LjUgQSAwLjUgMS41IDAgMSAxICAxNCwxNS41IEEgMC41IDEuNSAwIDEgMSAgMTUgMTUuNSB6Ig0KICAgICAgdHJhbnNmb3JtPSJtYXRyaXgoMC44NjYsMC41LC0wLjUsMC44NjYsOS42OTMsLTUuMTczKSINCiAgICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7IHN0cm9rZTojZmZmZmZmOyIgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyNC41NSwxMC40IEwgMjQuMSwxMS44NSBMIDI0LjYsMTIgQyAyNy43NSwxMyAzMC4yNSwxNC40OSAzMi41LDE4Ljc1IEMgMzQuNzUsMjMuMDEgMzUuNzUsMjkuMDYgMzUuMjUsMzkgTCAzNS4yLDM5LjUgTCAzNy40NSwzOS41IEwgMzcuNSwzOSBDIDM4LDI4Ljk0IDM2LjYyLDIyLjE1IDM0LjI1LDE3LjY2IEMgMzEuODgsMTMuMTcgMjguNDYsMTEuMDIgMjUuMDYsMTAuNSBMIDI0LjU1LDEwLjQgeiAiDQogICAgICBzdHlsZT0iZmlsbDojZmZmZmZmOyBzdHJva2U6bm9uZTsiIC8+DQogIDwvZz4NCjwvc3ZnPg0K",
-  "bP": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPHBhdGggZD0ibSAyMi41LDkgYyAtMi4yMSwwIC00LDEuNzkgLTQsNCAwLDAuODkgMC4yOSwxLjcxIDAuNzgsMi4zOCBDIDE3LjMzLDE2LjUgMTYsMTguNTkgMTYsMjEgYyAwLDIuMDMgMC45NCwzLjg0IDIuNDEsNS4wMyBDIDE1LjQxLDI3LjA5IDExLDMxLjU4IDExLDM5LjUgSCAzNCBDIDM0LDMxLjU4IDI5LjU5LDI3LjA5IDI2LjU5LDI2LjAzIDI4LjA2LDI0Ljg0IDI5LDIzLjAzIDI5LDIxIDI5LDE4LjU5IDI3LjY3LDE2LjUgMjUuNzIsMTUuMzggMjYuMjEsMTQuNzEgMjYuNSwxMy44OSAyNi41LDEzIGMgMCwtMi4yMSAtMS43OSwtNCAtNCwtNCB6IiBzdHlsZT0ib3BhY2l0eToxOyBmaWxsOiMwMDAwMDA7IGZpbGwtb3BhY2l0eToxOyBmaWxsLXJ1bGU6bm9uemVybzsgc3Ryb2tlOiMwMDAwMDA7IHN0cm9rZS13aWR0aDoxLjU7IHN0cm9rZS1saW5lY2FwOnJvdW5kOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IHN0cm9rZS1taXRlcmxpbWl0OjQ7IHN0cm9rZS1kYXNoYXJyYXk6bm9uZTsgc3Ryb2tlLW9wYWNpdHk6MTsiLz4KPC9zdmc+Cg==",
-  "bQ": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIKImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIKaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQiPgoKICAgIDxwYXRoIGQ9Ik0gOSwyNiBDIDE3LjUsMjQuNSAzMCwyNC41IDM2LDI2IEwgMzguNSwxMy41IEwgMzEsMjUgTCAzMC43LDEwLjkgTCAyNS41LDI0LjUgTCAyMi41LDEwIEwgMTkuNSwyNC41IEwgMTQuMywxMC45IEwgMTQsMjUgTCA2LjUsMTMuNSBMIDksMjYgeiIKICAgIHN0eWxlPSJzdHJva2UtbGluZWNhcDpidXR0O2ZpbGw6IzAwMDAwMCIgLz4KICAgIDxwYXRoIGQ9Im0gOSwyNiBjIDAsMiAxLjUsMiAyLjUsNCAxLDEuNSAxLDEgMC41LDMuNSAtMS41LDEgLTEsMi41IC0xLDIuNSAtMS41LDEuNSAwLDIuNSAwLDIuNSA2LjUsMSAxNi41LDEgMjMsMCAwLDAgMS41LC0xIDAsLTIuNSAwLDAgMC41LC0xLjUgLTEsLTIuNSAtMC41LC0yLjUgLTAuNSwtMiAwLjUsLTMuNSAxLC0yIDIuNSwtMiAyLjUsLTQgLTguNSwtMS41IC0xOC41LC0xLjUgLTI3LDAgeiIgLz4KICAgIDxwYXRoIGQ9Ik0gMTEuNSwzMCBDIDE1LDI5IDMwLDI5IDMzLjUsMzAiIC8+CiAgICA8cGF0aCBkPSJtIDEyLDMzLjUgYyA2LC0xIDE1LC0xIDIxLDAiIC8+CiAgICA8Y2lyY2xlIGN4PSI2IiBjeT0iMTIiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIxNCIgY3k9IjkiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIyMi41IiBjeT0iOCIgcj0iMiIgLz4KICAgIDxjaXJjbGUgY3g9IjMxIiBjeT0iOSIgcj0iMiIgLz4KICAgIDxjaXJjbGUgY3g9IjM5IiBjeT0iMTIiIHI9IjIiIC8+CiAgICA8cGF0aCBkPSJNIDExLDM4LjUgQSAzNSwzNSAxIDAgMCAzNCwzOC41IgogICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8ZyBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsiPgogICAgICA8cGF0aCBkPSJNIDExLDI5IEEgMzUsMzUgMSAwIDEgMzQsMjkiIC8+CiAgICAgIDxwYXRoIGQ9Ik0gMTIuNSwzMS41IEwgMzIuNSwzMS41IiAvPgogICAgICA8cGF0aCBkPSJNIDExLjUsMzQuNSBBIDM1LDM1IDEgMCAwIDMzLjUsMzQuNSIgLz4KICAgICAgPHBhdGggZD0iTSAxMC41LDM3LjUgQSAzNSwzNSAxIDAgMCAzNC41LDM3LjUiIC8+CiAgICA8L2c+CiAgPC9nPgo8L3N2Zz4K",
-  "bR": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDojMDAwMDAwOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4KICAgIDxwYXRoCiAgICAgIGQ9Ik0gOSwzOSBMIDM2LDM5IEwgMzYsMzYgTCA5LDM2IEwgOSwzOSB6ICIKICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMi41LDMyIEwgMTQsMjkuNSBMIDMxLDI5LjUgTCAzMi41LDMyIEwgMTIuNSwzMiB6ICIKICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMiwzNiBMIDEyLDMyIEwgMzMsMzIgTCAzMywzNiBMIDEyLDM2IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8cGF0aAogICAgICBkPSJNIDE0LDI5LjUgTCAxNCwxNi41IEwgMzEsMTYuNSBMIDMxLDI5LjUgTCAxNCwyOS41IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDtzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxNCwxNi41IEwgMTEsMTQgTCAzNCwxNCBMIDMxLDE2LjUgTCAxNCwxNi41IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8cGF0aAogICAgICBkPSJNIDExLDE0IEwgMTEsOSBMIDE1LDkgTCAxNSwxMSBMIDIwLDExIEwgMjAsOSBMIDI1LDkgTCAyNSwxMSBMIDMwLDExIEwgMzAsOSBMIDM0LDkgTCAzNCwxNCBMIDExLDE0IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8cGF0aAogICAgICBkPSJNIDEyLDM1LjUgTCAzMywzNS41IEwgMzMsMzUuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMywzMS41IEwgMzIsMzEuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxNCwyOS41IEwgMzEsMjkuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxNCwxNi41IEwgMzEsMTYuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMSwxNCBMIDM0LDE0IgogICAgICBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsgc3Ryb2tlLXdpZHRoOjE7IHN0cm9rZS1saW5lam9pbjptaXRlcjsiIC8+CiAgPC9nPgo8L3N2Zz4K",
-  "wB": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLXJ1bGU6ZXZlbm9kZDsgZmlsbC1vcGFjaXR5OjE7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDsgc3Ryb2tlLWxpbmVqb2luOnJvdW5kOyBzdHJva2UtbWl0ZXJsaW1pdDo0OyBzdHJva2UtZGFzaGFycmF5Om5vbmU7IHN0cm9rZS1vcGFjaXR5OjE7IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLDAuNikiPg0KICAgIDxnIHN0eWxlPSJmaWxsOiNmZmZmZmY7IHN0cm9rZTojMDAwMDAwOyBzdHJva2UtbGluZWNhcDpidXR0OyI+DQogICAgICA8cGF0aCBkPSJNIDksMzYgQyAxMi4zOSwzNS4wMyAxOS4xMSwzNi40MyAyMi41LDM0IEMgMjUuODksMzYuNDMgMzIuNjEsMzUuMDMgMzYsMzYgQyAzNiwzNiAzNy42NSwzNi41NCAzOSwzOCBDIDM4LjMyLDM4Ljk3IDM3LjM1LDM4Ljk5IDM2LDM4LjUgQyAzMi42MSwzNy41MyAyNS44OSwzOC45NiAyMi41LDM3LjUgQyAxOS4xMSwzOC45NiAxMi4zOSwzNy41MyA5LDM4LjUgQyA3LjY1LDM4Ljk5IDYuNjgsMzguOTcgNiwzOCBDIDcuMzUsMzYuNTQgOSwzNiA5LDM2IHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMTUsMzIgQyAxNy41LDM0LjUgMjcuNSwzNC41IDMwLDMyIEMgMzAuNSwzMC41IDMwLDMwIDMwLDMwIEMgMzAsMjcuNSAyNy41LDI2IDI3LjUsMjYgQyAzMywyNC41IDMzLjUsMTQuNSAyMi41LDEwLjUgQyAxMS41LDE0LjUgMTIsMjQuNSAxNy41LDI2IEMgMTcuNSwyNiAxNSwyNy41IDE1LDMwIEMgMTUsMzAgMTQuNSwzMC41IDE1LDMyIHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMjUgOCBBIDIuNSAyLjUgMCAxIDEgIDIwLDggQSAyLjUgMi41IDAgMSAxICAyNSA4IHoiLz4NCiAgICA8L2c+DQogICAgPHBhdGggZD0iTSAxNy41LDI2IEwgMjcuNSwyNiBNIDE1LDMwIEwgMzAsMzAgTSAyMi41LDE1LjUgTCAyMi41LDIwLjUgTSAyMCwxOCBMIDI1LDE4IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIvPg0KICA8L2c+DQo8L3N2Zz4NCg==",
-  "wK": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iNDUiIGhlaWdodD0iNDUiPgogIDxnIGZpbGw9Im5vbmUiIGZpbGwtcnVsZT0iZXZlbm9kZCIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMS41Ij4KICAgIDxwYXRoIHN0cm9rZS1saW5lam9pbj0ibWl0ZXIiIGQ9Ik0yMi41IDExLjYzVjZNMjAgOGg1Ii8+CiAgICA8cGF0aCBmaWxsPSIjZmZmIiBzdHJva2UtbGluZWNhcD0iYnV0dCIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIgZD0iTTIyLjUgMjVzNC41LTcuNSAzLTEwLjVjMCAwLTEtMi41LTMtMi41cy0zIDIuNS0zIDIuNWMtMS41IDMgMyAxMC41IDMgMTAuNSIvPgogICAgPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTEyLjUgMzdjNS41IDMuNSAxNC41IDMuNSAyMCAwdi03czktNC41IDYtMTAuNWMtNC02LjUtMTMuNS0zLjUtMTYgNFYyN3YtMy41Yy0yLjUtNy41LTEyLTEwLjUtMTYtNC0zIDYgNiAxMC41IDYgMTAuNXY3Ii8+CiAgICA8cGF0aCBkPSJNMTIuNSAzMGM1LjUtMyAxNC41LTMgMjAgMG0tMjAgMy41YzUuNS0zIDE0LjUtMyAyMCAwbS0yMCAzLjVjNS41LTMgMTQuNS0zIDIwIDAiLz4KICA8L2c+Cjwvc3ZnPg==",
-  "wN": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyMiwxMCBDIDMyLjUsMTEgMzguNSwxOCAzOCwzOSBMIDE1LDM5IEMgMTUsMzAgMjUsMzIuNSAyMywxOCINCiAgICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7IHN0cm9rZTojMDAwMDAwOyIgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyNCwxOCBDIDI0LjM4LDIwLjkxIDE4LjQ1LDI1LjM3IDE2LDI3IEMgMTMsMjkgMTMuMTgsMzEuMzQgMTEsMzEgQyA5Ljk1OCwzMC4wNiAxMi40MSwyNy45NiAxMSwyOCBDIDEwLDI4IDExLjE5LDI5LjIzIDEwLDMwIEMgOSwzMCA1Ljk5NywzMSA2LDI2IEMgNiwyNCAxMiwxNCAxMiwxNCBDIDEyLDE0IDEzLjg5LDEyLjEgMTQsMTAuNSBDIDEzLjI3LDkuNTA2IDEzLjUsOC41IDEzLjUsNy41IEMgMTQuNSw2LjUgMTYuNSwxMCAxNi41LDEwIEwgMTguNSwxMCBDIDE4LjUsMTAgMTkuMjgsOC4wMDggMjEsNyBDIDIyLDcgMjIsMTAgMjIsMTAiDQogICAgICBzdHlsZT0iZmlsbDojZmZmZmZmOyBzdHJva2U6IzAwMDAwMDsiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gOS41IDI1LjUgQSAwLjUgMC41IDAgMSAxIDguNSwyNS41IEEgMC41IDAuNSAwIDEgMSA5LjUgMjUuNSB6Ig0KICAgICAgc3R5bGU9ImZpbGw6IzAwMDAwMDsgc3Ryb2tlOiMwMDAwMDA7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDE1IDE1LjUgQSAwLjUgMS41IDAgMSAxICAxNCwxNS41IEEgMC41IDEuNSAwIDEgMSAgMTUgMTUuNSB6Ig0KICAgICAgdHJhbnNmb3JtPSJtYXRyaXgoMC44NjYsMC41LC0wLjUsMC44NjYsOS42OTMsLTUuMTczKSINCiAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7IHN0cm9rZTojMDAwMDAwOyIgLz4NCiAgPC9nPg0KPC9zdmc+DQo=",
-  "wP": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPHBhdGggZD0ibSAyMi41LDkgYyAtMi4yMSwwIC00LDEuNzkgLTQsNCAwLDAuODkgMC4yOSwxLjcxIDAuNzgsMi4zOCBDIDE3LjMzLDE2LjUgMTYsMTguNTkgMTYsMjEgYyAwLDIuMDMgMC45NCwzLjg0IDIuNDEsNS4wMyBDIDE1LjQxLDI3LjA5IDExLDMxLjU4IDExLDM5LjUgSCAzNCBDIDM0LDMxLjU4IDI5LjU5LDI3LjA5IDI2LjU5LDI2LjAzIDI4LjA2LDI0Ljg0IDI5LDIzLjAzIDI5LDIxIDI5LDE4LjU5IDI3LjY3LDE2LjUgMjUuNzIsMTUuMzggMjYuMjEsMTQuNzEgMjYuNSwxMy44OSAyNi41LDEzIGMgMCwtMi4yMSAtMS43OSwtNCAtNCwtNCB6IiBzdHlsZT0ib3BhY2l0eToxOyBmaWxsOiNmZmZmZmY7IGZpbGwtb3BhY2l0eToxOyBmaWxsLXJ1bGU6bm9uemVybzsgc3Ryb2tlOiMwMDAwMDA7IHN0cm9rZS13aWR0aDoxLjU7IHN0cm9rZS1saW5lY2FwOnJvdW5kOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IHN0cm9rZS1taXRlcmxpbWl0OjQ7IHN0cm9rZS1kYXNoYXJyYXk6bm9uZTsgc3Ryb2tlLW9wYWNpdHk6MTsiLz4KPC9zdmc+Cg==",
-  "wQ": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZCI+CiAgICA8cGF0aCBkPSJNIDksMjYgQyAxNy41LDI0LjUgMzAsMjQuNSAzNiwyNiBMIDM4LjUsMTMuNSBMIDMxLDI1IEwgMzAuNywxMC45IEwgMjUuNSwyNC41IEwgMjIuNSwxMCBMIDE5LjUsMjQuNSBMIDE0LjMsMTAuOSBMIDE0LDI1IEwgNi41LDEzLjUgTCA5LDI2IHoiLz4KICAgIDxwYXRoIGQ9Ik0gOSwyNiBDIDksMjggMTAuNSwyOCAxMS41LDMwIEMgMTIuNSwzMS41IDEyLjUsMzEgMTIsMzMuNSBDIDEwLjUsMzQuNSAxMSwzNiAxMSwzNiBDIDkuNSwzNy41IDExLDM4LjUgMTEsMzguNSBDIDE3LjUsMzkuNSAyNy41LDM5LjUgMzQsMzguNSBDIDM0LDM4LjUgMzUuNSwzNy41IDM0LDM2IEMgMzQsMzYgMzQuNSwzNC41IDMzLDMzLjUgQyAzMi41LDMxIDMyLjUsMzEuNSAzMy41LDMwIEMgMzQuNSwyOCAzNiwyOCAzNiwyNiBDIDI3LjUsMjQuNSAxNy41LDI0LjUgOSwyNiB6Ii8+CiAgICA8cGF0aCBkPSJNIDExLjUsMzAgQyAxNSwyOSAzMCwyOSAzMy41LDMwIiBzdHlsZT0iZmlsbDpub25lIi8+CiAgICA8cGF0aCBkPSJNIDEyLDMzLjUgQyAxOCwzMi41IDI3LDMyLjUgMzMsMzMuNSIgc3R5bGU9ImZpbGw6bm9uZSIvPgogICAgPGNpcmNsZSBjeD0iNiIgY3k9IjEyIiByPSIyIiAvPgogICAgPGNpcmNsZSBjeD0iMTQiIGN5PSI5IiByPSIyIiAvPgogICAgPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjgiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIzMSIgY3k9IjkiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIzOSIgY3k9IjEyIiByPSIyIiAvPgogIDwvZz4KPC9zdmc+Cg==",
-  "wR": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDojZmZmZmZmOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTSA5LDM5IEwgMzYsMzkgTCAzNiwzNiBMIDksMzYgTCA5LDM5IHogIg0KICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDEyLDM2IEwgMTIsMzIgTCAzMywzMiBMIDMzLDM2IEwgMTIsMzYgeiAiDQogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gMTEsMTQgTCAxMSw5IEwgMTUsOSBMIDE1LDExIEwgMjAsMTEgTCAyMCw5IEwgMjUsOSBMIDI1LDExIEwgMzAsMTEgTCAzMCw5IEwgMzQsOSBMIDM0LDE0Ig0KICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDM0LDE0IEwgMzEsMTcgTCAxNCwxNyBMIDExLDE0IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDMxLDE3IEwgMzEsMjkuNSBMIDE0LDI5LjUgTCAxNCwxNyINCiAgICAgIHN0eWxlPSJzdHJva2UtbGluZWNhcDpidXR0OyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDMxLDI5LjUgTCAzMi41LDMyIEwgMTIuNSwzMiBMIDE0LDI5LjUiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gMTEsMTQgTCAzNCwxNCINCiAgICAgIHN0eWxlPSJmaWxsOm5vbmU7IHN0cm9rZTojMDAwMDAwOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPg0KICA8L2c+DQo8L3N2Zz4NCg=="
+    "bB": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLXJ1bGU6ZXZlbm9kZDsgZmlsbC1vcGFjaXR5OjE7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDsgc3Ryb2tlLWxpbmVqb2luOnJvdW5kOyBzdHJva2UtbWl0ZXJsaW1pdDo0OyBzdHJva2UtZGFzaGFycmF5Om5vbmU7IHN0cm9rZS1vcGFjaXR5OjE7IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLDAuNikiPg0KICAgIDxnIHN0eWxlPSJmaWxsOiMwMDAwMDA7IHN0cm9rZTojMDAwMDAwOyBzdHJva2UtbGluZWNhcDpidXR0OyI+DQogICAgICA8cGF0aCBkPSJNIDksMzYgQyAxMi4zOSwzNS4wMyAxOS4xMSwzNi40MyAyMi41LDM0IEMgMjUuODksMzYuNDMgMzIuNjEsMzUuMDMgMzYsMzYgQyAzNiwzNiAzNy42NSwzNi41NCAzOSwzOCBDIDM4LjMyLDM4Ljk3IDM3LjM1LDM4Ljk5IDM2LDM4LjUgQyAzMi42MSwzNy41MyAyNS44OSwzOC45NiAyMi41LDM3LjUgQyAxOS4xMSwzOC45NiAxMi4zOSwzNy41MyA5LDM4LjUgQyA3LjY1LDM4Ljk5IDYuNjgsMzguOTcgNiwzOCBDIDcuMzUsMzYuNTQgOSwzNiA5LDM2IHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMTUsMzIgQyAxNy41LDM0LjUgMjcuNSwzNC41IDMwLDMyIEMgMzAuNSwzMC41IDMwLDMwIDMwLDMwIEMgMzAsMjcuNSAyNy41LDI2IDI3LjUsMjYgQyAzMywyNC41IDMzLjUsMTQuNSAyMi41LDEwLjUgQyAxMS41LDE0LjUgMTIsMjQuNSAxNy41LDI2IEMgMTcuNSwyNiAxNSwyNy41IDE1LDMwIEMgMTUsMzAgMTQuNSwzMC41IDE1LDMyIHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMjUgOCBBIDIuNSAyLjUgMCAxIDEgIDIwLDggQSAyLjUgMi41IDAgMSAxICAyNSA4IHoiLz4NCiAgICA8L2c+DQogICAgPHBhdGggZD0iTSAxNy41LDI2IEwgMjcuNSwyNiBNIDE1LDMwIEwgMzAsMzAgTSAyMi41LDE1LjUgTCAyMi41LDIwLjUgTSAyMCwxOCBMIDI1LDE4IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIvPg0KICA8L2c+DQo8L3N2Zz4NCg==",
+    "bK": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9ImZpbGw6bm9uZTsgZmlsbC1vcGFjaXR5OjE7IGZpbGwtcnVsZTpldmVub2RkOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLXdpZHRoOjEuNTsgc3Ryb2tlLWxpbmVjYXA6cm91bmQ7c3Ryb2tlLWxpbmVqb2luOnJvdW5kO3N0cm9rZS1taXRlcmxpbWl0OjQ7IHN0cm9rZS1kYXNoYXJyYXk6bm9uZTsgc3Ryb2tlLW9wYWNpdHk6MTsiPgogICAgPHBhdGggZD0iTSAyMi41LDExLjYzIEwgMjIuNSw2IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIgaWQ9InBhdGg2NTcwIi8+CiAgICA8cGF0aCBkPSJNIDIyLjUsMjUgQyAyMi41LDI1IDI3LDE3LjUgMjUuNSwxNC41IEMgMjUuNSwxNC41IDI0LjUsMTIgMjIuNSwxMiBDIDIwLjUsMTIgMTkuNSwxNC41IDE5LjUsMTQuNSBDIDE4LDE3LjUgMjIuNSwyNSAyMi41LDI1IiBzdHlsZT0iZmlsbDojMDAwMDAwO2ZpbGwtb3BhY2l0eToxOyBzdHJva2UtbGluZWNhcDpidXR0OyBzdHJva2UtbGluZWpvaW46bWl0ZXI7Ii8+CiAgICA8cGF0aCBkPSJNIDEyLjUsMzcgQyAxOCw0MC41IDI3LDQwLjUgMzIuNSwzNyBMIDMyLjUsMzAgQyAzMi41LDMwIDQxLjUsMjUuNSAzOC41LDE5LjUgQyAzNC41LDEzIDI1LDE2IDIyLjUsMjMuNSBMIDIyLjUsMjcgTCAyMi41LDIzLjUgQyAyMCwxNiAxMC41LDEzIDYuNSwxOS41IEMgMy41LDI1LjUgMTIuNSwzMCAxMi41LDMwIEwgMTIuNSwzNyIgc3R5bGU9ImZpbGw6IzAwMDAwMDsgc3Ryb2tlOiMwMDAwMDA7Ii8+CiAgICA8cGF0aCBkPSJNIDIwLDggTCAyNSw4IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIvPgogICAgPHBhdGggZD0iTSAzMiwyOS41IEMgMzIsMjkuNSA0MC41LDI1LjUgMzguMDMsMTkuODUgQyAzNC4xNSwxNCAyNSwxOCAyMi41LDI0LjUgTCAyMi41LDI2LjYgTCAyMi41LDI0LjUgQyAyMCwxOCAxMC44NSwxNCA2Ljk3LDE5Ljg1IEMgNC41LDI1LjUgMTMsMjkuNSAxMywyOS41IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsiLz4KICAgIDxwYXRoIGQ9Ik0gMTIuNSwzMCBDIDE4LDI3IDI3LDI3IDMyLjUsMzAgTSAxMi41LDMzLjUgQyAxOCwzMC41IDI3LDMwLjUgMzIuNSwzMy41IE0gMTIuNSwzNyBDIDE4LDM0IDI3LDM0IDMyLjUsMzciIHN0eWxlPSJmaWxsOm5vbmU7IHN0cm9rZTojZmZmZmZmOyIvPgogIDwvZz4KPC9zdmc+Cg==",
+    "bN": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyMiwxMCBDIDMyLjUsMTEgMzguNSwxOCAzOCwzOSBMIDE1LDM5IEMgMTUsMzAgMjUsMzIuNSAyMywxOCINCiAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7IHN0cm9rZTojMDAwMDAwOyIgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyNCwxOCBDIDI0LjM4LDIwLjkxIDE4LjQ1LDI1LjM3IDE2LDI3IEMgMTMsMjkgMTMuMTgsMzEuMzQgMTEsMzEgQyA5Ljk1OCwzMC4wNiAxMi40MSwyNy45NiAxMSwyOCBDIDEwLDI4IDExLjE5LDI5LjIzIDEwLDMwIEMgOSwzMCA1Ljk5NywzMSA2LDI2IEMgNiwyNCAxMiwxNCAxMiwxNCBDIDEyLDE0IDEzLjg5LDEyLjEgMTQsMTAuNSBDIDEzLjI3LDkuNTA2IDEzLjUsOC41IDEzLjUsNy41IEMgMTQuNSw2LjUgMTYuNSwxMCAxNi41LDEwIEwgMTguNSwxMCBDIDE4LjUsMTAgMTkuMjgsOC4wMDggMjEsNyBDIDIyLDcgMjIsMTAgMjIsMTAiDQogICAgICBzdHlsZT0iZmlsbDojMDAwMDAwOyBzdHJva2U6IzAwMDAwMDsiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gOS41IDI1LjUgQSAwLjUgMC41IDAgMSAxIDguNSwyNS41IEEgMC41IDAuNSAwIDEgMSA5LjUgMjUuNSB6Ig0KICAgICAgc3R5bGU9ImZpbGw6I2ZmZmZmZjsgc3Ryb2tlOiNmZmZmZmY7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDE1IDE1LjUgQSAwLjUgMS41IDAgMSAxICAxNCwxNS41IEEgMC41IDEuNSAwIDEgMSAgMTUgMTUuNSB6Ig0KICAgICAgdHJhbnNmb3JtPSJtYXRyaXgoMC44NjYsMC41LC0wLjUsMC44NjYsOS42OTMsLTUuMTczKSINCiAgICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7IHN0cm9rZTojZmZmZmZmOyIgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyNC41NSwxMC40IEwgMjQuMSwxMS44NSBMIDI0LjYsMTIgQyAyNy43NSwxMyAzMC4yNSwxNC40OSAzMi41LDE4Ljc1IEMgMzQuNzUsMjMuMDEgMzUuNzUsMjkuMDYgMzUuMjUsMzkgTCAzNS4yLDM5LjUgTCAzNy40NSwzOS41IEwgMzcuNSwzOSBDIDM4LDI4Ljk0IDM2LjYyLDIyLjE1IDM0LjI1LDE3LjY2IEMgMzEuODgsMTMuMTcgMjguNDYsMTEuMDIgMjUuMDYsMTAuNSBMIDI0LjU1LDEwLjQgeiAiDQogICAgICBzdHlsZT0iZmlsbDojZmZmZmZmOyBzdHJva2U6bm9uZTsiIC8+DQogIDwvZz4NCjwvc3ZnPg0K",
+    "bP": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPHBhdGggZD0ibSAyMi41LDkgYyAtMi4yMSwwIC00LDEuNzkgLTQsNCAwLDAuODkgMC4yOSwxLjcxIDAuNzgsMi4zOCBDIDE3LjMzLDE2LjUgMTYsMTguNTkgMTYsMjEgYyAwLDIuMDMgMC45NCwzLjg0IDIuNDEsNS4wMyBDIDE1LjQxLDI3LjA5IDExLDMxLjU4IDExLDM5LjUgSCAzNCBDIDM0LDMxLjU4IDI5LjU5LDI3LjA5IDI2LjU5LDI2LjAzIDI4LjA2LDI0Ljg0IDI5LDIzLjAzIDI5LDIxIDI5LDE4LjU5IDI3LjY3LDE2LjUgMjUuNzIsMTUuMzggMjYuMjEsMTQuNzEgMjYuNSwxMy44OSAyNi41LDEzIGMgMCwtMi4yMSAtMS43OSwtNCAtNCwtNCB6IiBzdHlsZT0ib3BhY2l0eToxOyBmaWxsOiMwMDAwMDA7IGZpbGwtb3BhY2l0eToxOyBmaWxsLXJ1bGU6bm9uemVybzsgc3Ryb2tlOiMwMDAwMDA7IHN0cm9rZS13aWR0aDoxLjU7IHN0cm9rZS1saW5lY2FwOnJvdW5kOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IHN0cm9rZS1taXRlcmxpbWl0OjQ7IHN0cm9rZS1kYXNoYXJyYXk6bm9uZTsgc3Ryb2tlLW9wYWNpdHk6MTsiLz4KPC9zdmc+Cg==",
+    "bQ": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIKImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIKaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQiPgoKICAgIDxwYXRoIGQ9Ik0gOSwyNiBDIDE3LjUsMjQuNSAzMCwyNC41IDM2LDI2IEwgMzguNSwxMy41IEwgMzEsMjUgTCAzMC43LDEwLjkgTCAyNS41LDI0LjUgTCAyMi41LDEwIEwgMTkuNSwyNC41IEwgMTQuMywxMC45IEwgMTQsMjUgTCA2LjUsMTMuNSBMIDksMjYgeiIKICAgIHN0eWxlPSJzdHJva2UtbGluZWNhcDpidXR0O2ZpbGw6IzAwMDAwMCIgLz4KICAgIDxwYXRoIGQ9Im0gOSwyNiBjIDAsMiAxLjUsMiAyLjUsNCAxLDEuNSAxLDEgMC41LDMuNSAtMS41LDEgLTEsMi41IC0xLDIuNSAtMS41LDEuNSAwLDIuNSAwLDIuNSA2LjUsMSAxNi41LDEgMjMsMCAwLDAgMS41LC0xIDAsLTIuNSAwLDAgMC41LC0xLjUgLTEsLTIuNSAtMC41LC0yLjUgLTAuNSwtMiAwLjUsLTMuNSAxLC0yIDIuNSwtMiAyLjUsLTQgLTguNSwtMS41IC0xOC41LC0xLjUgLTI3LDAgeiIgLz4KICAgIDxwYXRoIGQ9Ik0gMTEuNSwzMCBDIDE1LDI5IDMwLDI5IDMzLjUsMzAiIC8+CiAgICA8cGF0aCBkPSJtIDEyLDMzLjUgYyA2LC0xIDE1LC0xIDIxLDAiIC8+CiAgICA8Y2lyY2xlIGN4PSI2IiBjeT0iMTIiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIxNCIgY3k9IjkiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIyMi41IiBjeT0iOCIgcj0iMiIgLz4KICAgIDxjaXJjbGUgY3g9IjMxIiBjeT0iOSIgcj0iMiIgLz4KICAgIDxjaXJjbGUgY3g9IjM5IiBjeT0iMTIiIHI9IjIiIC8+CiAgICA8cGF0aCBkPSJNIDExLDM4LjUgQSAzNSwzNSAxIDAgMCAzNCwzOC41IgogICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8ZyBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsiPgogICAgICA8cGF0aCBkPSJNIDExLDI5IEEgMzUsMzUgMSAwIDEgMzQsMjkiIC8+CiAgICAgIDxwYXRoIGQ9Ik0gMTIuNSwzMS41IEwgMzIuNSwzMS41IiAvPgogICAgICA8cGF0aCBkPSJNIDExLjUsMzQuNSBBIDM1LDM1IDEgMCAwIDMzLjUsMzQuNSIgLz4KICAgICAgPHBhdGggZD0iTSAxMC41LDM3LjUgQSAzNSwzNSAxIDAgMCAzNC41LDM3LjUiIC8+CiAgICA8L2c+CiAgPC9nPgo8L3N2Zz4K",
+    "bR": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDojMDAwMDAwOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4KICAgIDxwYXRoCiAgICAgIGQ9Ik0gOSwzOSBMIDM2LDM5IEwgMzYsMzYgTCA5LDM2IEwgOSwzOSB6ICIKICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMi41LDMyIEwgMTQsMjkuNSBMIDMxLDI5LjUgTCAzMi41LDMyIEwgMTIuNSwzMiB6ICIKICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMiwzNiBMIDEyLDMyIEwgMzMsMzIgTCAzMywzNiBMIDEyLDM2IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8cGF0aAogICAgICBkPSJNIDE0LDI5LjUgTCAxNCwxNi41IEwgMzEsMTYuNSBMIDMxLDI5LjUgTCAxNCwyOS41IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDtzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxNCwxNi41IEwgMTEsMTQgTCAzNCwxNCBMIDMxLDE2LjUgTCAxNCwxNi41IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8cGF0aAogICAgICBkPSJNIDExLDE0IEwgMTEsOSBMIDE1LDkgTCAxNSwxMSBMIDIwLDExIEwgMjAsOSBMIDI1LDkgTCAyNSwxMSBMIDMwLDExIEwgMzAsOSBMIDM0LDkgTCAzNCwxNCBMIDExLDE0IHogIgogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+CiAgICA8cGF0aAogICAgICBkPSJNIDEyLDM1LjUgTCAzMywzNS41IEwgMzMsMzUuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMywzMS41IEwgMzIsMzEuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxNCwyOS41IEwgMzEsMjkuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxNCwxNi41IEwgMzEsMTYuNSIKICAgICAgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiNmZmZmZmY7IHN0cm9rZS13aWR0aDoxOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPgogICAgPHBhdGgKICAgICAgZD0iTSAxMSwxNCBMIDM0LDE0IgogICAgICBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6I2ZmZmZmZjsgc3Ryb2tlLXdpZHRoOjE7IHN0cm9rZS1saW5lam9pbjptaXRlcjsiIC8+CiAgPC9nPgo8L3N2Zz4K",
+    "wB": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLXJ1bGU6ZXZlbm9kZDsgZmlsbC1vcGFjaXR5OjE7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDsgc3Ryb2tlLWxpbmVqb2luOnJvdW5kOyBzdHJva2UtbWl0ZXJsaW1pdDo0OyBzdHJva2UtZGFzaGFycmF5Om5vbmU7IHN0cm9rZS1vcGFjaXR5OjE7IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLDAuNikiPg0KICAgIDxnIHN0eWxlPSJmaWxsOiNmZmZmZmY7IHN0cm9rZTojMDAwMDAwOyBzdHJva2UtbGluZWNhcDpidXR0OyI+DQogICAgICA8cGF0aCBkPSJNIDksMzYgQyAxMi4zOSwzNS4wMyAxOS4xMSwzNi40MyAyMi41LDM0IEMgMjUuODksMzYuNDMgMzIuNjEsMzUuMDMgMzYsMzYgQyAzNiwzNiAzNy42NSwzNi41NCAzOSwzOCBDIDM4LjMyLDM4Ljk3IDM3LjM1LDM4Ljk5IDM2LDM4LjUgQyAzMi42MSwzNy41MyAyNS44OSwzOC45NiAyMi41LDM3LjUgQyAxOS4xMSwzOC45NiAxMi4zOSwzNy41MyA5LDM4LjUgQyA3LjY1LDM4Ljk5IDYuNjgsMzguOTcgNiwzOCBDIDcuMzUsMzYuNTQgOSwzNiA5LDM2IHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMTUsMzIgQyAxNy41LDM0LjUgMjcuNSwzNC41IDMwLDMyIEMgMzAuNSwzMC41IDMwLDMwIDMwLDMwIEMgMzAsMjcuNSAyNy41LDI2IDI3LjUsMjYgQyAzMywyNC41IDMzLjUsMTQuNSAyMi41LDEwLjUgQyAxMS41LDE0LjUgMTIsMjQuNSAxNy41LDI2IEMgMTcuNSwyNiAxNSwyNy41IDE1LDMwIEMgMTUsMzAgMTQuNSwzMC41IDE1LDMyIHoiLz4NCiAgICAgIDxwYXRoIGQ9Ik0gMjUgOCBBIDIuNSAyLjUgMCAxIDEgIDIwLDggQSAyLjUgMi41IDAgMSAxICAyNSA4IHoiLz4NCiAgICA8L2c+DQogICAgPHBhdGggZD0iTSAxNy41LDI2IEwgMjcuNSwyNiBNIDE1LDMwIEwgMzAsMzAgTSAyMi41LDE1LjUgTCAyMi41LDIwLjUgTSAyMCwxOCBMIDI1LDE4IiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6IzAwMDAwMDsgc3Ryb2tlLWxpbmVqb2luOm1pdGVyOyIvPg0KICA8L2c+DQo8L3N2Zz4NCg==",
+    "wK": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iNDUiIGhlaWdodD0iNDUiPgogIDxnIGZpbGw9Im5vbmUiIGZpbGwtcnVsZT0iZXZlbm9kZCIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMS41Ij4KICAgIDxwYXRoIHN0cm9rZS1saW5lam9pbj0ibWl0ZXIiIGQ9Ik0yMi41IDExLjYzVjZNMjAgOGg1Ii8+CiAgICA8cGF0aCBmaWxsPSIjZmZmIiBzdHJva2UtbGluZWNhcD0iYnV0dCIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIgZD0iTTIyLjUgMjVzNC41LTcuNSAzLTEwLjVjMCAwLTEtMi41LTMtMi41cy0zIDIuNS0zIDIuNWMtMS41IDMgMyAxMC41IDMgMTAuNSIvPgogICAgPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTEyLjUgMzdjNS41IDMuNSAxNC41IDMuNSAyMCAwdi03czktNC41IDYtMTAuNWMtNC02LjUtMTMuNS0zLjUtMTYgNFYyN3YtMy41Yy0yLjUtNy41LTEyLTEwLjUtMTYtNC0zIDYgNiAxMC41IDYgMTAuNXY3Ii8+CiAgICA8cGF0aCBkPSJNMTIuNSAzMGM1LjUtMyAxNC41LTMgMjAgMG0tMjAgMy41YzUuNS0zIDE0LjUtMyAyMCAwbS0yMCAzLjVjNS41LTMgMTQuNS0zIDIwIDAiLz4KICA8L2c+Cjwvc3ZnPg==",
+    "wN": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDpub25lOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyMiwxMCBDIDMyLjUsMTEgMzguNSwxOCAzOCwzOSBMIDE1LDM5IEMgMTUsMzAgMjUsMzIuNSAyMywxOCINCiAgICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7IHN0cm9rZTojMDAwMDAwOyIgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTSAyNCwxOCBDIDI0LjM4LDIwLjkxIDE4LjQ1LDI1LjM3IDE2LDI3IEMgMTMsMjkgMTMuMTgsMzEuMzQgMTEsMzEgQyA5Ljk1OCwzMC4wNiAxMi40MSwyNy45NiAxMSwyOCBDIDEwLDI4IDExLjE5LDI5LjIzIDEwLDMwIEMgOSwzMCA1Ljk5NywzMSA2LDI2IEMgNiwyNCAxMiwxNCAxMiwxNCBDIDEyLDE0IDEzLjg5LDEyLjEgMTQsMTAuNSBDIDEzLjI3LDkuNTA2IDEzLjUsOC41IDEzLjUsNy41IEMgMTQuNSw2LjUgMTYuNSwxMCAxNi41LDEwIEwgMTguNSwxMCBDIDE4LjUsMTAgMTkuMjgsOC4wMDggMjEsNyBDIDIyLDcgMjIsMTAgMjIsMTAiDQogICAgICBzdHlsZT0iZmlsbDojZmZmZmZmOyBzdHJva2U6IzAwMDAwMDsiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gOS41IDI1LjUgQSAwLjUgMC41IDAgMSAxIDguNSwyNS41IEEgMC41IDAuNSAwIDEgMSA5LjUgMjUuNSB6Ig0KICAgICAgc3R5bGU9ImZpbGw6IzAwMDAwMDsgc3Ryb2tlOiMwMDAwMDA7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDE1IDE1LjUgQSAwLjUgMS41IDAgMSAxICAxNCwxNS41IEEgMC41IDEuNSAwIDEgMSAgMTUgMTUuNSB6Ig0KICAgICAgdHJhbnNmb3JtPSJtYXRyaXgoMC44NjYsMC41LC0wLjUsMC44NjYsOS42OTMsLTUuMTczKSINCiAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7IHN0cm9rZTojMDAwMDAwOyIgLz4NCiAgPC9nPg0KPC9zdmc+DQo=",
+    "wP": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPHBhdGggZD0ibSAyMi41LDkgYyAtMi4yMSwwIC00LDEuNzkgLTQsNCAwLDAuODkgMC4yOSwxLjcxIDAuNzgsMi4zOCBDIDE3LjMzLDE2LjUgMTYsMTguNTkgMTYsMjEgYyAwLDIuMDMgMC45NCwzLjg0IDIuNDEsNS4wMyBDIDE1LjQxLDI3LjA5IDExLDMxLjU4IDExLDM5LjUgSCAzNCBDIDM0LDMxLjU4IDI5LjU5LDI3LjA5IDI2LjU5LDI2LjAzIDI4LjA2LDI0Ljg0IDI5LDIzLjAzIDI5LDIxIDI5LDE4LjU5IDI3LjY3LDE2LjUgMjUuNzIsMTUuMzggMjYuMjEsMTQuNzEgMjYuNSwxMy44OSAyNi41LDEzIGMgMCwtMi4yMSAtMS43OSwtNCAtNCwtNCB6IiBzdHlsZT0ib3BhY2l0eToxOyBmaWxsOiNmZmZmZmY7IGZpbGwtb3BhY2l0eToxOyBmaWxsLXJ1bGU6bm9uemVybzsgc3Ryb2tlOiMwMDAwMDA7IHN0cm9rZS13aWR0aDoxLjU7IHN0cm9rZS1saW5lY2FwOnJvdW5kOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IHN0cm9rZS1taXRlcmxpbWl0OjQ7IHN0cm9rZS1kYXNoYXJyYXk6bm9uZTsgc3Ryb2tlLW9wYWNpdHk6MTsiLz4KPC9zdmc+Cg==",
+    "wQ": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CiAgPGcgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZCI+CiAgICA8cGF0aCBkPSJNIDksMjYgQyAxNy41LDI0LjUgMzAsMjQuNSAzNiwyNiBMIDM4LjUsMTMuNSBMIDMxLDI1IEwgMzAuNywxMC45IEwgMjUuNSwyNC41IEwgMjIuNSwxMCBMIDE5LjUsMjQuNSBMIDE0LjMsMTAuOSBMIDE0LDI1IEwgNi41LDEzLjUgTCA5LDI2IHoiLz4KICAgIDxwYXRoIGQ9Ik0gOSwyNiBDIDksMjggMTAuNSwyOCAxMS41LDMwIEMgMTIuNSwzMS41IDEyLjUsMzEgMTIsMzMuNSBDIDEwLjUsMzQuNSAxMSwzNiAxMSwzNiBDIDkuNSwzNy41IDExLDM4LjUgMTEsMzguNSBDIDE3LjUsMzkuNSAyNy41LDM5LjUgMzQsMzguNSBDIDM0LDM4LjUgMzUuNSwzNy41IDM0LDM2IEMgMzQsMzYgMzQuNSwzNC41IDMzLDMzLjUgQyAzMi41LDMxIDMyLjUsMzEuNSAzMy41LDMwIEMgMzQuNSwyOCAzNiwyOCAzNiwyNiBDIDI3LjUsMjQuNSAxNy41LDI0LjUgOSwyNiB6Ii8+CiAgICA8cGF0aCBkPSJNIDExLjUsMzAgQyAxNSwyOSAzMCwyOSAzMy41LDMwIiBzdHlsZT0iZmlsbDpub25lIi8+CiAgICA8cGF0aCBkPSJNIDEyLDMzLjUgQyAxOCwzMi41IDI3LDMyLjUgMzMsMzMuNSIgc3R5bGU9ImZpbGw6bm9uZSIvPgogICAgPGNpcmNsZSBjeD0iNiIgY3k9IjEyIiByPSIyIiAvPgogICAgPGNpcmNsZSBjeD0iMTQiIGN5PSI5IiByPSIyIiAvPgogICAgPGNpcmNsZSBjeD0iMjIuNSIgY3k9IjgiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIzMSIgY3k9IjkiIHI9IjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIzOSIgY3k9IjEyIiByPSIyIiAvPgogIDwvZz4KPC9zdmc+Cg==",
+    "wR": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IURPQ1RZUEUgc3ZnIFBVQkxJQyAiLS8vVzNDLy9EVEQgU1ZHIDEuMS8vRU4iICJodHRwOi8vd3d3LnczLm9yZy9HcmFwaGljcy9TVkcvMS4xL0RURC9zdmcxMS5kdGQiPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjQ1IiBoZWlnaHQ9IjQ1Ij4NCiAgPGcgc3R5bGU9Im9wYWNpdHk6MTsgZmlsbDojZmZmZmZmOyBmaWxsLW9wYWNpdHk6MTsgZmlsbC1ydWxlOmV2ZW5vZGQ7IHN0cm9rZTojMDAwMDAwOyBzdHJva2Utd2lkdGg6MS41OyBzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLW1pdGVybGltaXQ6NDsgc3Ryb2tlLWRhc2hhcnJheTpub25lOyBzdHJva2Utb3BhY2l0eToxOyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCwwLjMpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTSA5LDM5IEwgMzYsMzkgTCAzNiwzNiBMIDksMzYgTCA5LDM5IHogIg0KICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDEyLDM2IEwgMTIsMzIgTCAzMywzMiBMIDMzLDM2IEwgMTIsMzYgeiAiDQogICAgICBzdHlsZT0ic3Ryb2tlLWxpbmVjYXA6YnV0dDsiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gMTEsMTQgTCAxMSw5IEwgMTUsOSBMIDE1LDExIEwgMjAsMTEgTCAyMCw5IEwgMjUsOSBMIDI1LDExIEwgMzAsMTEgTCAzMCw5IEwgMzQsOSBMIDM0LDE0Ig0KICAgICAgc3R5bGU9InN0cm9rZS1saW5lY2FwOmJ1dHQ7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDM0LDE0IEwgMzEsMTcgTCAxNCwxNyBMIDExLDE0IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDMxLDE3IEwgMzEsMjkuNSBMIDE0LDI5LjUgTCAxNCwxNyINCiAgICAgIHN0eWxlPSJzdHJva2UtbGluZWNhcDpidXR0OyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNIDMxLDI5LjUgTCAzMi41LDMyIEwgMTIuNSwzMiBMIDE0LDI5LjUiIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik0gMTEsMTQgTCAzNCwxNCINCiAgICAgIHN0eWxlPSJmaWxsOm5vbmU7IHN0cm9rZTojMDAwMDAwOyBzdHJva2UtbGluZWpvaW46bWl0ZXI7IiAvPg0KICA8L2c+DQo8L3N2Zz4NCg=="
 };
 
 function openGUI() {
     Gui.open(() => {
-        const popDoc  = Gui.document;
+        const popDoc = Gui.document;
         const popHead = popDoc.head;
-        const popWin  = Gui.window;
+        const popWin = Gui.window;
         const q = id => popDoc.querySelector(id);
 
         // Scripts are now loaded via @require in the userscript header to completely bypass CSP!
 
-        const fenEl         = q('#fen');
+        const fenEl = q('#fen');
         const orientationEl = q('#orientation');
 
         if (!fenEl) {
@@ -1367,7 +1396,7 @@ function openGUI() {
             const cb = window.Chessboard || window.ChessBoard;
             let uiBoard = cb(q('#board'), {
                 pieceTheme: piece => PIECES_B64[piece],
-                position:   'start',
+                position: 'start',
                 orientation: playerColor === 'b' ? 'black' : 'white'
             });
 
@@ -1383,7 +1412,7 @@ function openGUI() {
                 try {
                     uiBoard = cb(q('#board'), {
                         pieceTheme: piece => PIECES_B64[piece],
-                        position:   fenEl.textContent || 'start',
+                        position: fenEl.textContent || 'start',
                         orientation: orientationEl.textContent === 'b' ? 'black' : 'white'
                     });
                 } catch (e) {
@@ -1395,7 +1424,7 @@ function openGUI() {
                 try {
                     const newFen = fenEl.textContent;
                     if (newFen && uiBoard) uiBoard.position(newFen);
-                } catch(e) {
+                } catch (e) {
                     console.error('UserGui: Error updating board position:', e);
                 }
             }).observe(fenEl, { childList: true, characterData: true, subtree: true });
@@ -1403,31 +1432,31 @@ function openGUI() {
 
         waitForLibraries();
 
-        const depthRangeEl       = q('#depth-range');
-        const depthRangeNumEl    = q('#depth-range-number');
-        const moveTimeRangeEl    = q('#movetime-range');
+        const depthRangeEl = q('#depth-range');
+        const depthRangeNumEl = q('#depth-range-number');
+        const moveTimeRangeEl = q('#movetime-range');
         const moveTimeRangeNumEl = q('#movetime-range-number');
-        const maxMovesEl         = q('#max-moves');
-        const maxMovesDivEl      = q('#max-moves-div');
-        const engineModeEl       = q('#select-engine-mode');
-        const engineEl           = q('#select-engine');
-        const engineNameDivEl    = q('#node-engine-div');
-        const reloadEngineDivEl  = q('#reload-engine-div');
-        const reloadEngineEl     = q('#reload-engine');
-        const reloadEveryDivEl   = q('#reload-count-div');
-        const reloadEveryEl      = q('#reload-count');
-        const nodeNameEl         = q('#engine-name');
-        const nodeUrlEl          = q('#engine-url');
-        const useBookEl          = q('#use-book-moves');
-        const showOppEl          = q('#show-opposite-moves');
-        const displayOnSiteEl    = q('#display-moves-on-site');
-        const enableUserLogEl    = q('#enable-user-log');
-        const enableEngineLogEl  = q('#enable-engine-log');
-        const eloEl              = q('#elo');
-        const bestMoveBtnEl      = q('#bestmove-btn');
-        const nightModeEl        = q('#night-mode-btn');
-        const tutoEl             = q('#tuto-btn');
-        const resetEl            = q('#reset-settings');
+        const maxMovesEl = q('#max-moves');
+        const maxMovesDivEl = q('#max-moves-div');
+        const engineModeEl = q('#select-engine-mode');
+        const engineEl = q('#select-engine');
+        const engineNameDivEl = q('#node-engine-div');
+        const reloadEngineDivEl = q('#reload-engine-div');
+        const reloadEngineEl = q('#reload-engine');
+        const reloadEveryDivEl = q('#reload-count-div');
+        const reloadEveryEl = q('#reload-count');
+        const nodeNameEl = q('#engine-name');
+        const nodeUrlEl = q('#engine-url');
+        const useBookEl = q('#use-book-moves');
+        const showOppEl = q('#show-opposite-moves');
+        const displayOnSiteEl = q('#display-moves-on-site');
+        const enableUserLogEl = q('#enable-user-log');
+        const enableEngineLogEl = q('#enable-engine-log');
+        const eloEl = q('#elo');
+        const bestMoveBtnEl = q('#bestmove-btn');
+        const nightModeEl = q('#night-mode-btn');
+        const tutoEl = q('#tuto-btn');
+        const resetEl = q('#reset-settings');
 
         fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
         const selectedEngine = ENGINE_NAMES.indexOf(engineName);
@@ -1437,9 +1466,9 @@ function openGUI() {
 
         if (isFirefox()) {
             popDoc.querySelectorAll('.rendered-form').forEach(el => el.style.width = 'auto');
-            const gui     = q('#gui');
+            const gui = q('#gui');
             const content = q('#content');
-            if (gui)     gui.style.minWidth = '350px';
+            if (gui) gui.style.minWidth = '350px';
             if (content) { content.style.maxHeight = '500px'; content.style.overflow = 'scroll'; }
             [q('#engine-log-container'), q('#userscript-log-container')].forEach(el => {
                 if (el) { el.style.maxHeight = '100px'; el.style.overflow = 'scroll'; }
@@ -1452,8 +1481,8 @@ function openGUI() {
         }
 
         if (CURRENT_SITE === LICHESS_ORG) {
-            if (maxMovesDivEl)     maxMovesDivEl.style.display     = 'none';
-            if (engineNameDivEl)   engineNameDivEl.style.display   = 'none';
+            if (maxMovesDivEl) maxMovesDivEl.style.display = 'none';
+            if (engineNameDivEl) engineNameDivEl.style.display = 'none';
             if (reloadEngineDivEl) reloadEngineDivEl.style.display = 'block';
         }
 
@@ -1488,7 +1517,7 @@ function openGUI() {
             GM_setValue(DB.engineMode, engineMode);
             fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
             // Cancel any in flight request with old mode
-            lastBestMoveID++; 
+            lastBestMoveID++;
             Interface.log(`Engine mode: ${engineMode === DEPTH_MODE ? 'Depth' : 'Move time'}`);
         };
 
@@ -1497,18 +1526,18 @@ function openGUI() {
             GM_setValue(DB.engineName, engineName);
             const isNode = engineName === GO_ENGINE_NAME;
             if (reloadEngineDivEl) reloadEngineDivEl.style.display = isNode ? 'none' : 'block';
-            if (engineNameDivEl)   engineNameDivEl.style.display   = isNode ? 'block' : 'none';
-            if (maxMovesDivEl)     maxMovesDivEl.style.display     = isNode ? 'none' : 'block';
+            if (engineNameDivEl) engineNameDivEl.style.display = isNode ? 'block' : 'none';
+            if (maxMovesDivEl) maxMovesDivEl.style.display = isNode ? 'none' : 'block';
             if (engineObjectURL) {
                 URL.revokeObjectURL(engineObjectURL);
-                engineObjectURL  = null;
+                engineObjectURL = null;
                 loadedEngineName = null;
             }
             engine?.terminate();
-            engine           = null;
+            engine = null;
             loadedEngineName = null;
             // Cancel in-flight requests.
-            lastBestMoveID++; 
+            lastBestMoveID++;
             loadChessEngine(true, () => {
                 Interface.boardUtils.removeBestMarkings();
                 removeSiteMoveMarkings();
@@ -1519,35 +1548,35 @@ function openGUI() {
 
         const changePower = val => {
             if (engineMode === DEPTH_MODE) {
-                current_depth    = Number(val);
+                current_depth = Number(val);
                 GM_setValue(DB.current_depth, current_depth);
-                if (depthRangeEl)    depthRangeEl.value    = current_depth;
+                if (depthRangeEl) depthRangeEl.value = current_depth;
                 if (depthRangeNumEl) depthRangeNumEl.value = current_depth;
             } else {
                 current_movetime = Number(val);
                 GM_setValue(DB.current_movetime, current_movetime);
-                if (moveTimeRangeEl)    moveTimeRangeEl.value    = current_movetime;
+                if (moveTimeRangeEl) moveTimeRangeEl.value = current_movetime;
                 if (moveTimeRangeNumEl) moveTimeRangeNumEl.value = current_movetime;
             }
             setEloDescription(eloEl);
             // Force engine to use new (depth, movetime) on next request immediately
             // Cancel any in flight request.
-            lastBestMoveID++; 
+            lastBestMoveID++;
         };
 
-        if (depthRangeEl)       depthRangeEl.onchange       = () => changePower(depthRangeEl.value);
-        if (depthRangeNumEl)    depthRangeNumEl.onchange    = () => changePower(depthRangeNumEl.value);
-        if (moveTimeRangeEl)    moveTimeRangeEl.onchange    = () => changePower(moveTimeRangeEl.value);
+        if (depthRangeEl) depthRangeEl.onchange = () => changePower(depthRangeEl.value);
+        if (depthRangeNumEl) depthRangeNumEl.onchange = () => changePower(depthRangeNumEl.value);
+        if (moveTimeRangeEl) moveTimeRangeEl.onchange = () => changePower(moveTimeRangeEl.value);
         if (moveTimeRangeNumEl) moveTimeRangeNumEl.onchange = () => changePower(moveTimeRangeNumEl.value);
-        if (maxMovesEl)         maxMovesEl.onchange         = () => { max_best_moves = Number(maxMovesEl.value); GM_setValue(DB.max_best_moves, max_best_moves); };
+        if (maxMovesEl) maxMovesEl.onchange = () => { max_best_moves = Number(maxMovesEl.value); GM_setValue(DB.max_best_moves, max_best_moves); };
 
-        if (nodeNameEl)        nodeNameEl.onchange        = () => { node_engine_name    = nodeNameEl.value;           GM_setValue(DB.node_engine_name,    node_engine_name);    };
-        if (nodeUrlEl)         nodeUrlEl.onchange         = () => { node_engine_url     = nodeUrlEl.value;            GM_setValue(DB.node_engine_url,     node_engine_url);     };
-        if (useBookEl)         useBookEl.onchange         = () => { use_book_moves      = useBookEl.checked;          GM_setValue(DB.use_book_moves,      use_book_moves);      };
-        if (showOppEl)         showOppEl.onchange         = () => { show_opposite_moves = showOppEl.checked;          GM_setValue(DB.show_opposite_moves, show_opposite_moves); };
-        if (displayOnSiteEl)   displayOnSiteEl.onchange   = () => { displayMovesOnSite  = displayOnSiteEl.checked;   GM_setValue(DB.displayMovesOnSite,  displayMovesOnSite);  };
-        if (enableUserLogEl)   enableUserLogEl.onchange   = () => { enableUserLog       = enableUserLogEl.checked;   GM_setValue(DB.enableUserLog,       enableUserLog);       };
-        if (enableEngineLogEl) enableEngineLogEl.onchange = () => { enableEngineLog     = enableEngineLogEl.checked; GM_setValue(DB.enableEngineLog,     enableEngineLog);     };
+        if (nodeNameEl) nodeNameEl.onchange = () => { node_engine_name = nodeNameEl.value; GM_setValue(DB.node_engine_name, node_engine_name); };
+        if (nodeUrlEl) nodeUrlEl.onchange = () => { node_engine_url = nodeUrlEl.value; GM_setValue(DB.node_engine_url, node_engine_url); };
+        if (useBookEl) useBookEl.onchange = () => { use_book_moves = useBookEl.checked; GM_setValue(DB.use_book_moves, use_book_moves); };
+        if (showOppEl) showOppEl.onchange = () => { show_opposite_moves = showOppEl.checked; GM_setValue(DB.show_opposite_moves, show_opposite_moves); };
+        if (displayOnSiteEl) displayOnSiteEl.onchange = () => { displayMovesOnSite = displayOnSiteEl.checked; GM_setValue(DB.displayMovesOnSite, displayMovesOnSite); };
+        if (enableUserLogEl) enableUserLogEl.onchange = () => { enableUserLog = enableUserLogEl.checked; GM_setValue(DB.enableUserLog, enableUserLog); };
+        if (enableEngineLogEl) enableEngineLogEl.onchange = () => { enableEngineLog = enableEngineLogEl.checked; GM_setValue(DB.enableEngineLog, enableEngineLog); };
 
         if (reloadEngineEl) reloadEngineEl.onchange = () => {
             reload_engine = reloadEngineEl.checked;
@@ -1574,10 +1603,10 @@ function fixDepthMoveTimeInput(depthR, depthN, mtR, mtN, eloElem) {
     if (!depthR) return;
     const ff = isFirefox();
     const dm = engineMode === DEPTH_MODE;
-    depthR.style.display = (!ff && dm)  ? 'block' : 'none';
-    depthN.style.display = (ff  && dm)  ? 'block' : 'none';
-    mtR.style.display    = (!ff && !dm) ? 'block' : 'none';
-    mtN.style.display    = (ff  && !dm) ? 'block' : 'none';
+    depthR.style.display = (!ff && dm) ? 'block' : 'none';
+    depthN.style.display = (ff && dm) ? 'block' : 'none';
+    mtR.style.display = (!ff && !dm) ? 'block' : 'none';
+    mtN.style.display = (ff && !dm) ? 'block' : 'none';
     setEloDescription(eloElem);
 }
 
@@ -1599,28 +1628,28 @@ async function initializeDatabase(callback) {
         for (const [k, v] of Object.entries(defaults)) await GM_setValue(DB[k], v);
     }
 
-    nightMode           = await GM_getValue(DB.nightMode);
-    engineMode          = await GM_getValue(DB.engineMode);
-    engineName         = await GM_getValue(DB.engineName) || ENGINE_NAMES[0];
-    reload_engine       = await GM_getValue(DB.reload_engine);
-    reload_every        = await GM_getValue(DB.reload_every);
-    enableUserLog       = await GM_getValue(DB.enableUserLog);
-    enableEngineLog     = await GM_getValue(DB.enableEngineLog);
-    displayMovesOnSite  = await GM_getValue(DB.displayMovesOnSite);
+    nightMode = await GM_getValue(DB.nightMode);
+    engineMode = await GM_getValue(DB.engineMode);
+    engineName = await GM_getValue(DB.engineName) || ENGINE_NAMES[0];
+    reload_engine = await GM_getValue(DB.reload_engine);
+    reload_every = await GM_getValue(DB.reload_every);
+    enableUserLog = await GM_getValue(DB.enableUserLog);
+    enableEngineLog = await GM_getValue(DB.enableEngineLog);
+    displayMovesOnSite = await GM_getValue(DB.displayMovesOnSite);
     show_opposite_moves = await GM_getValue(DB.show_opposite_moves);
-    use_book_moves      = await GM_getValue(DB.use_book_moves);
-    node_engine_url     = await GM_getValue(DB.node_engine_url) || 'http://localhost:5000';
-    node_engine_name    = await GM_getValue(DB.node_engine_name) || 'komodo-201-64';
-    current_depth       = await GM_getValue(DB.current_depth);
-    current_movetime    = await GM_getValue(DB.current_movetime);
-    max_best_moves      = await GM_getValue(DB.max_best_moves);
+    use_book_moves = await GM_getValue(DB.use_book_moves);
+    node_engine_url = await GM_getValue(DB.node_engine_url) || 'http://localhost:5000';
+    node_engine_name = await GM_getValue(DB.node_engine_name) || 'komodo-201-64';
+    current_depth = await GM_getValue(DB.current_depth);
+    current_movetime = await GM_getValue(DB.current_movetime);
+    max_best_moves = await GM_getValue(DB.max_best_moves);
 
     callback();
 }
 
 // Entry point
 function initialize() {
-    Interface  = new InterfaceUtils();
+    Interface = new InterfaceUtils();
     const logger = (...args) => console.log('[SmartChess]', ...args);
     if (!Interface.log) Interface.log = logger;
     if (!Interface.log) Interface.log = (...args) => console.log('[SmartChess]', ...args);
@@ -1651,16 +1680,16 @@ if (typeof GM_registerMenuCommand === 'function') {
 
 const waitForChessBoard = setInterval(() => {
     if (CURRENT_SITE === null || CURRENT_SITE === undefined) {
-        if      (window.location.href.includes('lichess.org')) CURRENT_SITE = LICHESS_ORG;
-        else if (window.location.href.includes('chess.com'))   CURRENT_SITE = CHESS_COM;
+        if (window.location.href.includes('lichess.org')) CURRENT_SITE = LICHESS_ORG;
+        else if (window.location.href.includes('chess.com')) CURRENT_SITE = CHESS_COM;
     }
 
     if (CURRENT_SITE === LICHESS_ORG) {
-        boardElem      = document.querySelector('cg-board') || document.querySelector('.cg-wrap') || document.querySelector('[data-board]');
+        boardElem = document.querySelector('cg-board') || document.querySelector('.cg-wrap') || document.querySelector('[data-board]');
         firstPieceElem = boardElem?.querySelector('piece:not(.ghost)') ?? boardElem?.querySelector('.cg-piece') ?? boardElem?.querySelector('[data-role]') ?? null;
     } else if (CURRENT_SITE === CHESS_COM) {
-        boardElem      = document.querySelector('.board');
         firstPieceElem = document.querySelector('.piece');
+        boardElem = firstPieceElem ? (firstPieceElem.closest('wc-chess-board') || firstPieceElem.closest('.board')) : document.querySelector('wc-chess-board, .board');
     }
 
     if (boardElem && firstPieceElem && chessBoardElem !== boardElem) {
