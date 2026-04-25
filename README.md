@@ -17,6 +17,9 @@ This project is a major fork of A.C.A.S. It uses the old chess system from befor
 - Depth settings
 - Binary chess engines (Run them directly via the GO server)
 - Use Book moves (Lichess API)
+- Bypass (Adds random delays to the moves)
+- Move Cooldown (Adds random delays to the moves)
+- Auto Play (Plays moves automatically)
 
 ### Features
 - Built in Elo bar
