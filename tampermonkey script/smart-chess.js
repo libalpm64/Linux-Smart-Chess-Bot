@@ -38,6 +38,10 @@ const MAX_ELO = 3500;
 const DEPTH_MODE = 0;
 const MAX_LOGS = 50;
 
+const DEFAULT_COOLDOWN = 0;
+const MAX_COOLDOWN = 2000;
+const DEFAULT_BYPASS = false;
+
 const rank = ['Beginner', 'Intermediate', 'Advanced', 'Expert', 'Master', 'Grand Master'];
 
 const ENGINE_RESOURCES = ['lozza.js', 'stockfish-5.js', 'stockfish-2018.js', 'tomitankChess.js', 'stockfish-18-asm.js'];
@@ -60,7 +64,7 @@ const DB = {
     use_book_moves: 'use_book_moves', node_engine_url: 'node_engine_url',
     node_engine_name: 'node_engine_name', current_depth: 'current_depth',
     current_movetime: 'current_movetime', max_best_moves: 'max_best_moves',
-    isAutoplay: 'isAutoplay'
+    isAutoplay: 'isAutoplay', move_cooldown: 'move_cooldown', use_bezier_bypass: 'use_bezier_bypass'
 };
 
 let nightMode = false;
@@ -79,6 +83,8 @@ let current_depth = Math.round(MAX_DEPTH / 2);
 let current_movetime = Math.round(MAX_MOVETIME / 3);
 let max_best_moves = 1;
 let isAutoplay = false;
+let move_cooldown = DEFAULT_COOLDOWN;
+let use_bezier_bypass = DEFAULT_BYPASS;
 
 let lastBestMoveID = 0;
 let guiPagesAdded = false;
@@ -152,6 +158,41 @@ const isFirefox = () => navigator.userAgent.toLowerCase().includes('firefox');
 const alphabetPosition = ch => ch.charCodeAt(0) - 97;
 const removeDuplicates = arr => [...new Set(arr)];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function bezierCurve(t) {
+    // Cubic bezier: easeOutCubic for natural human-like delays
+    return 1 - Math.pow(1 - t, 3);
+}
+
+function getDelayedTime(baseDelay) {
+    if (move_cooldown === 0) {
+        return baseDelay;
+    }
+
+    if (!use_bezier_bypass) {
+        return Math.max(baseDelay, move_cooldown);
+    }
+
+    // Generate bezier-random delay on top of move_cooldown
+    const randomT = Math.random();
+    const bezierValue = bezierCurve(randomT);
+    const bezierDelay = move_cooldown * bezierValue;
+
+    return move_cooldown + bezierDelay;
+}
+
+function getMouseDelay() {
+    if (!use_bezier_bypass || move_cooldown === 0) {
+        return 0;
+    }
+
+    // Natural mouse movement bezier curve
+    const randomT = Math.random();
+    const bezierValue = bezierCurve(randomT);
+    // Mouse delays between 10-80ms with bezier distribution
+    const mouseDelay = 10 + (bezierValue * 70);
+    return Math.min(mouseDelay, move_cooldown / 10);
+}
 
 function fenSquareToChessComSquare(sq) {
     const [x, y] = sq.split('');
@@ -355,25 +396,30 @@ function InterfaceUtils() {
 
         markMove: (from, to, color) => {
             if (!Gui?.document) return;
+
             [from, to].forEach((sq, i) => {
                 const el = Interface.boardUtils.findSquareElem(sq);
                 if (!el) return;
-                el.style.scale = i === 0 ? '0.8' : '0.9';
+
+                el.style.transform = i === 0 ? 'scale(0.85)' : 'scale(0.95)';
                 el.style.backgroundColor = `rgba(${color[0]},${color[1]},${color[2]},${color[3] || 0.5})`;
+                el.style.transition = 'transform 0.05s ease-out, background-color 0.05s ease-out';
+
                 activeGuiMoveHighlights.push(el);
             });
+
             if (displayMovesOnSite && isPlayerTurn)
                 markMoveToSite(from, to, color);
         },
 
         removeBestMarkings: () => {
             activeGuiMoveHighlights.forEach(el => {
-                el.style.scale = '1';
+                el.style.transform = '';
                 el.style.backgroundColor = '';
+                el.style.transition = '';
             });
             activeGuiMoveHighlights = [];
         },
-
         updateBoardFen: fen => {
             const el = $('#fen');
             if (el) el.textContent = fen.slice(0, fen.lastIndexOf('-') - 1);
@@ -655,6 +701,7 @@ function playMoveOnSite(from, to, promotion = '') {
     }
 
     if (!new FenUtils().isMyTurn()) {
+        Interface.log('Autoplay: Not my turn, skipping move.');
         return;
     }
 
@@ -690,7 +737,6 @@ function playMoveOnSite(from, to, promotion = '') {
             width: 1, height: 1, pressure: buttons ? 0.5 : 0
         };
 
-
         const target = document.elementFromPoint(coords.clientX, coords.clientY) || board;
         target.dispatchEvent(new PointerEvent(type, opts));
         board.dispatchEvent(new PointerEvent(type, opts));
@@ -701,12 +747,16 @@ function playMoveOnSite(from, to, promotion = '') {
 
     Interface.log(`Autoplay: ${from} to ${to}`);
 
-    emit('pointerdown', fromCoords, 1);
-    emit('pointerup', fromCoords, 0);
+    // Add mouse bezier delays if enabled
+    if (use_bezier_bypass && move_cooldown > 0) {
+        const mouseDelay1 = getMouseDelay();
+        const mouseDelay2 = getMouseDelay();
+        const mouseDelay3 = getMouseDelay();
 
-    setTimeout(() => {
-        emit('pointerdown', toCoords, 1);
-        emit('pointerup', toCoords, 0);
+        setTimeout(() => emit('pointerdown', fromCoords, 1), mouseDelay1);
+        setTimeout(() => emit('pointerup', fromCoords, 0), mouseDelay1 + 10);
+        setTimeout(() => emit('pointerdown', toCoords, 1), mouseDelay1 + mouseDelay2 + 20);
+        setTimeout(() => emit('pointerup', toCoords, 0), mouseDelay1 + mouseDelay2 + mouseDelay3 + 30);
 
         if (promotion) {
             setTimeout(() => {
@@ -716,9 +766,23 @@ function playMoveOnSite(from, to, promotion = '') {
                     : (document.querySelector(`.promotion-pane [data-piece="${promotion}"]`) ||
                         document.querySelector(`.cg-wrap .promotion [data-piece="${promotion}"]`));
                 if (promoElem) promoElem.click();
-            }, 200);
+            }, mouseDelay1 + mouseDelay2 + mouseDelay3 + 100);
         }
-    }, 200);
+    } else {
+        emit('pointerdown', fromCoords, 1);
+        emit('pointerup', fromCoords, 0);
+        emit('pointerdown', toCoords, 1);
+        emit('pointerup', toCoords, 0);
+
+        if (promotion) {
+            const color = playerColor;
+            const promoElem = CURRENT_SITE === CHESS_COM
+                ? document.querySelector(`.promotion-piece.${color}${promotion}`)
+                : (document.querySelector(`.promotion-pane [data-piece="${promotion}"]`) ||
+                    document.querySelector(`.cg-wrap .promotion [data-piece="${promotion}"]`));
+            if (promoElem) promoElem.click();
+        }
+    }
 }
 
 function getChessComTurnFromDOM() {
@@ -813,8 +877,9 @@ function moveResult(from, to, power, clear = true, promotion = '') {
     Interface.boardUtils.markMove(from, to, isPlayerTurn ? best_move_color : opposite_best_move_color);
     Interface.stopBestMoveProcessingAnimation();
 
-    if (isAutoplay && isPlayerTurn) {
-        setTimeout(() => playMoveOnSite(from, to, promotion), 150 + Math.random() * 200);
+    if (isAutoplay && isPlayerTurn && CURRENT_SITE === CHESS_COM) {
+        const delay = getDelayedTime(50); // Base 50ms + bezier cooldown
+        setTimeout(() => playMoveOnSite(from, to, promotion), delay);
     }
 }
 
@@ -909,7 +974,7 @@ function sendBestMove() {
         startEngineSearch(latestFen);
     };
 
-    requestDebounceTimer = setTimeout(processRequest, 300);
+    requestDebounceTimer = setTimeout(processRequest, 50);
 }
 
 function startEngineSearch(fen) {
@@ -1275,7 +1340,7 @@ function observeNewMoves() {
                 Interface.boardUtils.removeBestMarkings();
                 Interface.log(`Opponent's turn (${actualTurn}), cleared highlights.`);
             }
-        }, 50);
+        }, 20);
     };
 
     const cgWrap = document.querySelector('.cg-wrap') || chessBoardElem;
@@ -1426,6 +1491,11 @@ label.night,input.night{color:#fff;background:#525252}
 .checkmark:after{content:"";position:absolute;display:none}
 .container input:checked~.checkmark:after{display:block}
 .container .checkmark:after{width:40%;height:70%;margin-left:1px;border:solid white;border-width:0 3px 3px 0;transform:rotate(45deg)}
+.form-range { -webkit-appearance: none; width: 100%; height: 8px; background: #ddd; border-radius: 10px; outline: none; margin: 15px 0; }
+.form-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; background: #2196F3; cursor: pointer; border-radius: 50%; border: 4px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: .1s; }
+.form-range::-webkit-slider-thumb:hover { transform: scale(1.1); }
+.night .form-range { background: #444; }
+.night .form-range::-webkit-slider-thumb { border-color: #545454; }
 </style>`;
 
 const engineOptionsHtml = ENGINE_NAMES.map(n => `<option>${n}</option>`).join('')
@@ -1561,6 +1631,16 @@ function addGuiPages() {
           <label class="container">Autoplay (Chess.com only)
             <input type="checkbox" id="autoplay-checkbox" ${isAutoplay ? 'checked' : ''}>
             <span class="checkmark"></span>
+          </label>
+          <div class="space"></div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="margin: 0; font-weight: bold; font-size: 14px;">Move Cooldown</label>
+            <span id="cooldown-value" style="font-weight: bold; color: #2196F3; font-size: 14px;">${move_cooldown}ms</span>
+          </div>
+          <input type="range" class="form-range" min="0" max="${MAX_COOLDOWN}" step="50" value="${move_cooldown}" id="cooldown-slider">
+          <label class="container">Bypass
+              <input type="checkbox" id="bezier-bypass" ${use_bezier_bypass ? 'checked' : ''}>
+              <span class="checkmark"></span>
           </label>
         </div>
       </div>
@@ -1700,11 +1780,17 @@ function openGUI() {
         const nightModeEl = q('#night-mode-btn');
         const tutoEl = q('#tuto-btn');
         const resetEl = q('#reset-settings');
+        const cooldownSlider = q('#cooldown-slider');
+        const cooldownValue = q('#cooldown-value');
+        const bezierBypassCheckbox = q('#bezier-bypass');
 
         fixDepthMoveTimeInput(depthRangeEl, depthRangeNumEl, moveTimeRangeEl, moveTimeRangeNumEl, eloEl);
         const selectedEngine = ENGINE_NAMES.indexOf(engineName);
         if (engineEl) engineEl.selectedIndex = selectedEngine >= 0 ? selectedEngine : 0;
         if (engineModeEl) engineModeEl.selectedIndex = engineMode;
+        if (cooldownSlider) cooldownSlider.value = move_cooldown;
+        if (cooldownValue) cooldownValue.textContent = move_cooldown + 'ms';
+        if (bezierBypassCheckbox) bezierBypassCheckbox.checked = use_bezier_bypass;
         applyNightMode();
 
         if (isFirefox()) {
@@ -1844,12 +1930,29 @@ function openGUI() {
         if (displayOnSiteEl) displayOnSiteEl.onchange = () => { displayMovesOnSite = displayOnSiteEl.checked; GM_setValue(DB.displayMovesOnSite, displayMovesOnSite); };
         if (enableUserLogEl) enableUserLogEl.onchange = () => { enableUserLog = enableUserLogEl.checked; GM_setValue(DB.enableUserLog, enableUserLog); };
         if (enableEngineLogEl) enableEngineLogEl.onchange = () => { enableEngineLog = enableEngineLogEl.checked; GM_setValue(DB.enableEngineLog, enableEngineLog); };
-
         if (reloadEngineEl) reloadEngineEl.onchange = () => {
             reload_engine = reloadEngineEl.checked;
             if (reloadEveryDivEl) reloadEveryDivEl.style.display = reload_engine ? 'block' : 'none';
             GM_setValue(DB.reload_engine, reload_engine);
         };
+
+        if (cooldownSlider) {
+            cooldownSlider.oninput = () => {
+                move_cooldown = parseInt(cooldownSlider.value);
+                cooldownValue.textContent = move_cooldown + 'ms';
+                GM_setValue(DB.move_cooldown, move_cooldown);
+                Interface.log(`Move cooldown set to: ${move_cooldown}ms`);
+            };
+        }
+
+        if (bezierBypassCheckbox) {
+            bezierBypassCheckbox.onchange = () => {
+                use_bezier_bypass = bezierBypassCheckbox.checked;
+                GM_setValue(DB.use_bezier_bypass, use_bezier_bypass);
+                Interface.log(`Bezier bypass: ${use_bezier_bypass ? 'ENABLED' : 'disabled'}`);
+            };
+        }
+
         if (reloadEveryEl) reloadEveryEl.onchange = () => {
             reload_every = Number(reloadEveryEl.value);
             GM_setValue(DB.reload_every, reload_every);
@@ -1886,7 +1989,7 @@ async function initializeDatabase(callback) {
         displayMovesOnSite: false, show_opposite_moves: false, use_book_moves: false,
         node_engine_url: 'http://localhost:5000', node_engine_name: 'komodo-201-64',
         current_depth: Math.round(MAX_DEPTH / 2), current_movetime: Math.round(MAX_MOVETIME / 3),
-        max_best_moves: 1, isAutoplay: false
+        max_best_moves: 1, isAutoplay: false, move_cooldown: DEFAULT_COOLDOWN, use_bezier_bypass: DEFAULT_BYPASS
     };
 
     const stored = await GM_getValue(DB.nightMode);
@@ -1911,6 +2014,8 @@ async function initializeDatabase(callback) {
     current_movetime = await GM_getValue(DB.current_movetime);
     max_best_moves = await GM_getValue(DB.max_best_moves);
     isAutoplay = await GM_getValue(DB.isAutoplay);
+    move_cooldown = await GM_getValue(DB.move_cooldown, DEFAULT_COOLDOWN);
+    use_bezier_bypass = await GM_getValue(DB.use_bezier_bypass, DEFAULT_BYPASS);
 
     callback();
 }
