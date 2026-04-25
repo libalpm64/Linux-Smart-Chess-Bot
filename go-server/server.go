@@ -69,8 +69,11 @@ func executeEngine(fen, depth, engineName string) ([]MoveLine, error) {
 		return nil, err
 	}
 
+	// Send UCI commands
 	fmt.Fprintf(stdin, "uci\n")
 	scanner := bufio.NewScanner(stdout)
+	
+	// Wait for uciok
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "uciok") {
@@ -78,100 +81,62 @@ func executeEngine(fen, depth, engineName string) ([]MoveLine, error) {
 		}
 	}
 
-	fmt.Fprintf(stdin, "setoption name MultiPV value %d\n", 5)
-	fmt.Fprintf(stdin, "ucinewgame\n")
-	fmt.Fprintf(stdin, "isready\n")
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "readyok") {
-			break
-		}
-	}
+	// Set position and go
 	fmt.Fprintf(stdin, "position fen %s\n", fen)
 	fmt.Fprintf(stdin, "go depth %s\n", depth)
-	stdin.Close()
-
-	var lines []MoveLine
-	pvLines := make(map[int]MoveLine)
-	var maxDepth int
-
+	
+	// Read output and find best move and score
+	var bestMove string
+	var bestScore int = 0
+	var scoreType string = "cp"
+	
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "bestmove ") {
+		
+		if strings.HasPrefix(line, "bestmove") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				bestMove = parts[1]
+			}
 			break
 		}
-		if strings.HasPrefix(line, "info depth ") {
+		
+		// Parse score from info lines
+		if strings.HasPrefix(line, "info") && strings.Contains(line, "score") {
 			fields := strings.Fields(line)
-			var score int
-			var scoreType string = "cp"
-			var pv []string
-			var depth int
-			var pvNum int = 1
-			hasMultiPV := false
-
 			for i, field := range fields {
-				if field == "depth" && i+1 < len(fields) {
-					depth, _ = strconv.Atoi(fields[i+1])
-				}
-				if field == "multipv" && i+1 < len(fields) {
-					pvNum, _ = strconv.Atoi(fields[i+1])
-					hasMultiPV = true
-				}
 				if field == "score" && i+2 < len(fields) {
-					next := fields[i+1]
-					if next == "cp" {
-						score, _ = strconv.Atoi(fields[i+2])
+					if fields[i+1] == "cp" {
+						score, _ := strconv.Atoi(fields[i+2])
+						bestScore = score
 						scoreType = "cp"
-					} else if next == "mate" {
-						score, _ = strconv.Atoi(fields[i+2])
+					} else if fields[i+1] == "mate" {
+						score, _ := strconv.Atoi(fields[i+2])
+						bestScore = score
 						scoreType = "mate"
 					}
-				}
-				if field == "pv" {
-					pv = fields[i+1:]
 					break
 				}
 			}
-
-			if len(pv) > 0 {
-				if hasMultiPV {
-					pvLines[pvNum] = MoveLine{
-						Moves:     pv,
-						Score:     score,
-						ScoreType: scoreType,
-						Depth:     depth,
-					}
-				} else {
-					if depth > maxDepth {
-						maxDepth = depth
-						pvLines[1] = MoveLine{
-							Moves:     pv,
-							Score:     score,
-							ScoreType: scoreType,
-							Depth:     depth,
-						}
-					}
-				}
-			}
 		}
 	}
-
-	if len(pvLines) == 0 {
-		return nil, fmt.Errorf("no moves found")
-	}
-
-	for i := 1; i <= len(pvLines); i++ {
-		if line, ok := pvLines[i]; ok {
-			lines = append(lines, line)
-		}
-	}
-
+	
 	cmd.Process.Kill()
-
-	if len(lines) == 0 {
+	
+	if bestMove == "" {
 		return nil, fmt.Errorf("no moves found")
 	}
-
+	
+	// Return the best move with score
+	lines := []MoveLine{
+		{
+			Moves:     []string{bestMove},
+			Score:     bestScore,
+			ScoreType: scoreType,
+			Depth:     14,
+		},
+	}
+	
 	return lines, nil
 }
 
@@ -182,15 +147,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	depth := r.URL.Query().Get("depth")
 	if depth == "" {
-		depth = "10"
+		depth = "14"
 	}
 	engineName := r.URL.Query().Get("engine")
 	if engineName == "" {
 		engineName = defaultEngine
 	}
 
+	log.Printf("Request: %s", fen[:min(30, len(fen))]+"...")
+
 	lines, err := executeEngine(fen, depth, engineName)
 	if err != nil {
+		log.Printf("Error: %v", err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -199,25 +167,38 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	resp := EngineResponse{
 		Fen:    fen,
 		Lines:  lines,
-		Turn:   "w",
+		Turn:   strings.Split(fen, " ")[1],
 		Depth:  intDepth,
 		Engine: engineName,
 	}
 
+	if len(lines) > 0 && len(lines[0].Moves) > 0 {
+		log.Printf("Best move: %s, Score: %d %s", lines[0].Moves[0], lines[0].Score, lines[0].ScoreType)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func main() {
 	http.HandleFunc("/getBestMove", handler)
 	http.HandleFunc("/engines", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"engines": engines,
 			"default": defaultEngine,
 		})
 	})
 
-	fmt.Println("Listening on port 5000")
+	fmt.Println("Chess server listening on port 5000")
 	log.Fatal(http.ListenAndServe(":5000", nil))
 }
