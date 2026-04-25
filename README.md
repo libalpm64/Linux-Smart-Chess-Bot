@@ -25,11 +25,11 @@ This project is a major fork of A.C.A.S. It uses the old chess system from befor
 - Binary chess engines (Run them directly via the GO server)
 - Use Book moves (Lichess API)
 - Really strong JS engines
+  - Stockfish-18-lite-asm (~ 3350 elo)
   - Lozza 9.0 (~3166 elo)
   - TomitankChess 6.0 (~3020 elo)
-  - Stockfish-18-asm (~ 2800 elo)
-  - Stockfish-2018 (~ 2700 elo)
-  - Stockfish 5.0 (~ 2500 elo)
+  - Stockfish-2018 (~ 2950 elo)
+  - Stockfish 5.0 (~ 2800 elo)
 
 ### License
 This project is licensed under the MIT License.

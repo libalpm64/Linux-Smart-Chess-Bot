@@ -295,6 +295,9 @@ function FenUtils() {
         }
         return 'w';
     };
+    this.isMyTurn = () => {
+        return this.getTurn() === this.getBoardOrientation();
+    };
     this.getTurn = () => {
         if (CURRENT_SITE === LICHESS_ORG) {
             const fenInput = document.querySelector('.fen-pnl input, .analyse__controls input.fen, input[name="fen"]');
@@ -651,6 +654,10 @@ function playMoveOnSite(from, to, promotion = '') {
         return;
     }
 
+    if (!new FenUtils().isMyTurn()) {
+        return;
+    }
+
     playerColor = Interface.getBoardOrientation();
     const board = document.querySelector('cg-container, wc-chess-board, chess-board, cg-board, .board, #board') || chessBoardElem;
     if (!board) return;
@@ -727,10 +734,10 @@ function getChessComTurnFromDOM() {
         if (nodes.length > 0) return nodes.length % 2 === 0 ? 'w' : 'b';
     }
 
-    const activeClock = document.querySelector('div.clock-player-turn');
+    const activeClock = document.querySelector('div.clock-player-turn, .clock-white.running, .clock-black.running');
     if (activeClock) {
-        if (activeClock.classList.contains('clock-white')) return 'w';
-        if (activeClock.classList.contains('clock-black')) return 'b';
+        if (activeClock.classList.contains('clock-white') || activeClock.classList.contains('white')) return 'w';
+        if (activeClock.classList.contains('clock-black') || activeClock.classList.contains('black')) return 'b';
     }
     return '';
 }
@@ -807,7 +814,7 @@ function moveResult(from, to, power, clear = true, promotion = '') {
     Interface.stopBestMoveProcessingAnimation();
 
     if (isAutoplay && isPlayerTurn) {
-        playMoveOnSite(from, to, promotion);
+        setTimeout(() => playMoveOnSite(from, to, promotion), 150 + Math.random() * 200);
     }
 }
 
@@ -1322,6 +1329,19 @@ function observeNewMoves() {
                 Interface.boardUtils.removeBestMarkings();
             }
         }, 50);
+    } else if (CURRENT_SITE === CHESS_COM) {
+        // Safety for chess.com to catch moves if mutation observer misses them
+        setInterval(() => {
+            const newFen = fenUtil.getFen();
+            if (newFen !== lastFen) {
+                onBoardChange();
+            } else if (isAutoplay && !isEngineBusy) {
+                const actualTurn = fenUtil.getTurn();
+                if (actualTurn === playerColor) {
+                    sendBestMove();
+                }
+            }
+        }, 1000);
     }
     // force re-eval on the position if the user plays the wrong move.
     if (CURRENT_SITE === LICHESS_ORG) {
